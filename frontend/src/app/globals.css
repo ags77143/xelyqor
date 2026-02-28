@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #f5f0e8;
+  --cream-dark: #ede7d9;
+  --ink: #2c2416;
+  --amber: #c17b2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background-color: var(--cream);
+  color: var(--ink);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Markdown styles for notes */
+.prose-notes h2 {
+  font-family: 'Lora', serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #2c2416;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid #c17b2e30;
+}
+
+.prose-notes h3 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #4a3520;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-notes p {
+  line-height: 1.8;
+  margin-bottom: 0.9rem;
+  color: #3a2d1e;
+}
+
+.prose-notes ul, .prose-notes ol {
+  margin: 0.5rem 0 1rem 1.5rem;
+  line-height: 1.8;
+}
+
+.prose-notes li {
+  margin-bottom: 0.3rem;
+  color: #3a2d1e;
+}
+
+.prose-notes strong {
+  color: #2c2416;
+  font-weight: 600;
+}
+
+.prose-notes code {
+  background: #e8e0d0;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c8b898; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #b0986e; }
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid #e8dcc8;
+  border-top-color: #c17b2e;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* Flash card flip */
+.perspective { perspective: 1000px; }
+.flip-card { transition: transform 0.5s; transform-style: preserve-3d; }
+.flip-card.flipped { transform: rotateY(180deg); }
+.flip-front, .flip-back {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-back { transform: rotateY(180deg); }

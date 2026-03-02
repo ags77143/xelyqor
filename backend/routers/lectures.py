@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from db import get_supabase
 from extractor import extract_youtube_transcript, extract_pdf_text, extract_pptx_text
-from ai import generate_title_summary_notes, generate_glossary
+from ai import generate_title_and_notes, generate_glossary
 
 router = APIRouter()
 
@@ -59,10 +59,6 @@ async def create_from_transcript(
     return await _create_lecture_with_materials(
         sb, user_id, subject_id, clean, "transcript", "", lecture_name
     )
-    sb = get_supabase()
-    return await _create_lecture_with_materials(
-        sb, user_id, subject_id, transcript, "transcript", "", lecture_name
-    )
 
 
 @router.post("/from-file")
@@ -91,10 +87,9 @@ async def create_from_file(
 
 
 async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, source_type, source_ref, lecture_name):
-    # Call 1: title + summary + notes
-    result1 = generate_title_summary_notes(transcript)
+    # Call 1: title + notes
+    result1 = generate_title_and_notes(transcript)
     title = lecture_name or result1.get("title", "Untitled Lecture")
-    summary = result1.get("summary", "")
     notes = result1.get("notes", "")
 
     # Call 2: glossary
@@ -117,7 +112,7 @@ async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, so
     sb.table("study_materials").insert({
         "lecture_id": lecture_id,
         "user_id": user_id,
-        "summary": summary,
+        "summary": "",
         "notes": notes,
         "glossary": json.dumps(glossary),
         "quiz": None,
@@ -141,6 +136,7 @@ async def delete_lecture(lecture_id: str):
     sb.table("lectures").delete().eq("id", lecture_id).execute()
     return {"ok": True}
 
+
 @router.post("/from-recording")
 async def create_from_recording(
     user_id: str = Form(...),
@@ -149,18 +145,15 @@ async def create_from_recording(
     audio: UploadFile = File(...),
 ):
     sb = get_supabase()
-    
-    # Save audio temporarily
     audio_bytes = await audio.read()
-    
+
     import tempfile
     import os
     with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
-    
+
     try:
-        # Transcribe with Groq Whisper
         from groq import Groq
         client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
         with open(tmp_path, "rb") as f:
@@ -171,7 +164,7 @@ async def create_from_recording(
         transcript = transcription.text
     finally:
         os.unlink(tmp_path)
-    
+
     return await _create_lecture_with_materials(
         sb, user_id, subject_id, transcript, "recording", "", lecture_name
     )

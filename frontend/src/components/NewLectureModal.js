@@ -12,10 +12,30 @@ const SOURCE_TYPES = [
   { id: "recording", label: "Record Lecture", icon: Mic },
 ];
 
+const DEPTH_OPTIONS = [
+  {
+    id: "ontop",
+    label: "On top of shit",
+    desc: "Maximum depth — every concept fully unpacked",
+    emoji: "🔥",
+  },
+  {
+    id: "meh",
+    label: "Meh",
+    desc: "Solid coverage — balanced depth and length",
+    emoji: "👌",
+  },
+  {
+    id: "cooked",
+    label: "Cooked",
+    desc: "Short and sharp — key points only",
+    emoji: "💀",
+  },
+];
+
 const SUBJECT_COLOURS = ["#c17b2e", "#2e7bc1", "#6b4fc8", "#2ec17b", "#c12e5a", "#c18b2e"];
 
 export default function NewLectureModal({ subjects, user, onClose, onCreated }) {
-  const [step, setStep] = useState(1); // 1=type, 2=name+subject, 3=content
   const [sourceType, setSourceType] = useState("");
   const [lectureName, setLectureName] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -23,12 +43,13 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [file, setFile] = useState(null);
+  const [depth, setDepth] = useState("meh");
   const [loading, setLoading] = useState(false);
-const [recording, setRecording] = useState(false);
-const [mediaRecorder, setMediaRecorder] = useState(null);
-const [audioBlob, setAudioBlob] = useState(null);
-const [recordingTime, setRecordingTime] = useState(0);
-const [timerInterval, setTimerInterval] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [timerInterval, setTimerInterval] = useState(null);
 
   const startRecording = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -60,7 +81,8 @@ const [timerInterval, setTimerInterval] = useState(null);
     const s = (secs % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
-const handleSubmit = async () => {
+
+  const handleSubmit = async () => {
     if (!sourceType || !lectureName.trim()) {
       toast.error("Please fill in all required fields.");
       return;
@@ -68,9 +90,8 @@ const handleSubmit = async () => {
 
     setLoading(true);
     try {
-    let resolvedSubjectId = (subjectId === "__new__" || subjectId === "") ? "" : subjectId;
+      let resolvedSubjectId = (subjectId === "__new__" || subjectId === "") ? "" : subjectId;
 
-      // Create new subject if needed
       if (!resolvedSubjectId && newSubjectName.trim()) {
         const colour = SUBJECT_COLOURS[Math.floor(Math.random() * SUBJECT_COLOURS.length)];
         const { data } = await supabase.from("subjects").insert({
@@ -91,6 +112,7 @@ const handleSubmit = async () => {
       fd.append("user_id", user.id);
       fd.append("subject_id", resolvedSubjectId);
       fd.append("lecture_name", lectureName.trim());
+      fd.append("depth", depth);
 
       let endpoint = "";
       if (sourceType === "youtube") {
@@ -126,7 +148,7 @@ const handleSubmit = async () => {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-cream-darker">
           <h2 className="font-serif text-xl text-ink">New Lecture</h2>
@@ -136,7 +158,7 @@ const handleSubmit = async () => {
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Step 1: Source type */}
+          {/* Source type */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">1. Lecture source</label>
             <div className="grid grid-cols-3 gap-2">
@@ -157,7 +179,7 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          {/* Step 2: Name */}
+          {/* Lecture name */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">2. Lecture name</label>
             <input
@@ -169,7 +191,7 @@ const handleSubmit = async () => {
             />
           </div>
 
-          {/* Step 3: Subject */}
+          {/* Subject */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">3. Subject folder</label>
             <select
@@ -197,7 +219,33 @@ const handleSubmit = async () => {
             )}
           </div>
 
-          {/* Content input based on source type */}
+          {/* Depth selector */}
+          <div>
+            <label className="block text-sm font-semibold text-ink mb-2">4. Notes depth</label>
+            <div className="flex flex-col gap-2">
+              {DEPTH_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setDepth(opt.id)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                    depth === opt.id
+                      ? "border-amber bg-amber-pale"
+                      : "border-cream-darker hover:border-amber/40"
+                  }`}
+                >
+                  <span className="text-xl">{opt.emoji}</span>
+                  <div>
+                    <div className={`text-sm font-semibold ${depth === opt.id ? "text-amber" : "text-ink"}`}>
+                      {opt.label}
+                    </div>
+                    <div className="text-xs text-ink-light">{opt.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content input */}
           {sourceType === "youtube" && (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">YouTube URL</label>
@@ -235,7 +283,8 @@ const handleSubmit = async () => {
               />
             </div>
           )}
-{sourceType === "recording" && (
+
+          {sourceType === "recording" && (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">Record Lecture</label>
               <div className="flex flex-col items-center gap-4 p-6 bg-cream rounded-xl border border-cream-darker">
@@ -255,14 +304,11 @@ const handleSubmit = async () => {
                       <span className="font-mono text-lg font-bold text-ink">{formatTime(recordingTime)}</span>
                     </div>
                     <div className="flex gap-1 items-end h-8">
-                      {Array.from({length: 12}).map((_, i) => (
+                      {Array.from({ length: 12 }).map((_, i) => (
                         <div
                           key={i}
                           className="w-1.5 bg-amber rounded-full animate-pulse"
-                          style={{
-                            height: `${Math.random() * 100}%`,
-                            animationDelay: `${i * 0.1}s`
-                          }}
+                          style={{ height: `${Math.random() * 100}%`, animationDelay: `${i * 0.1}s` }}
                         />
                       ))}
                     </div>

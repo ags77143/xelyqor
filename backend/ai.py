@@ -27,6 +27,14 @@ def _parse_json(content: str):
             return json.loads(match.group())
         except Exception:
             pass
+    # Try to fix truncated JSON by closing it
+    try:
+        truncated = content.strip()
+        if truncated.startswith('{') and not truncated.endswith('}'):
+            truncated += '"}'
+            return json.loads(truncated)
+    except Exception:
+        pass
     match = re.search(r'\[[\s\S]*\]', content)
     if match:
         try:
@@ -39,7 +47,8 @@ def _parse_json(content: str):
 def generate_title_and_notes(transcript: str) -> dict:
     system = """You are an expert academic tutor generating comprehensive university study notes.
 Respond ONLY with a valid JSON object. No markdown, no explanation, no code fences. Just raw JSON.
-The JSON must have exactly these keys: title, notes."""
+The JSON must have exactly these keys: title, notes.
+CRITICAL: Your entire response must be valid JSON. Do not truncate or cut off mid-sentence."""
 
     prompt = f"""Given this lecture transcript, generate:
 1. title: A concise descriptive title for the lecture
@@ -66,7 +75,7 @@ Respond with raw JSON only. Example format:
         [{"role": "user", "content": prompt}],
         system,
         model="llama-3.3-70b-versatile",
-        max_tokens=8192
+        max_tokens=16000
     )
     return _parse_json(content)
 

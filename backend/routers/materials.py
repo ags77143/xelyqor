@@ -53,9 +53,30 @@ async def gen_flashcards(lecture_id: str):
 @router.post("/{lecture_id}/regenerate-notes")
 async def regenerate_notes(lecture_id: str, req: RegenerateNotesRequest):
     sb = get_supabase()
+
+    # Check if we already have this depth saved in DB
+    mat_res = sb.table("study_materials").select("notes, notes_cooked, notes_ontop").eq("lecture_id", lecture_id).single().execute()
+    mat = mat_res.data
+
+    if req.depth == "cooked" and mat.get("notes_cooked"):
+        return {"notes": mat["notes_cooked"]}
+    if req.depth == "ontop" and mat.get("notes_ontop"):
+        return {"notes": mat["notes_ontop"]}
+    if req.depth == "meh" and mat.get("notes"):
+        return {"notes": mat["notes"]}
+
+    # Generate fresh
     lec_res = sb.table("lectures").select("raw_transcript, title").eq("id", lecture_id).single().execute()
     lecture = lec_res.data
     result = generate_title_and_notes(lecture["raw_transcript"], req.depth)
     notes = result.get("notes", "")
-    sb.table("study_materials").update({"notes": notes}).eq("lecture_id", lecture_id).execute()
+
+    # Save to correct column
+    if req.depth == "cooked":
+        sb.table("study_materials").update({"notes_cooked": notes}).eq("lecture_id", lecture_id).execute()
+    elif req.depth == "ontop":
+        sb.table("study_materials").update({"notes_ontop": notes}).eq("lecture_id", lecture_id).execute()
+    else:
+        sb.table("study_materials").update({"notes": notes}).eq("lecture_id", lecture_id).execute()
+
     return {"notes": notes}

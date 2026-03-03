@@ -44,14 +44,13 @@ def _parse_json(content: str):
 
 
 def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
-    # Scale word targets based on transcript length
     transcript_words = len(transcript.split())
-    base = min(max(transcript_words, 800), 4000)  # sensible floor/ceiling
+    base = min(max(transcript_words, 800), 4000)
 
     depth_configs = {
         "cooked": {
             "words": int(base * 1.6),
-            "max_tokens": 4000,
+            "max_tokens": 6000,
             "instruction": """SHORT MODE:
    - Define each core concept concisely with a clear 1-2 sentence definition
    - One short paragraph per major concept explaining how it works
@@ -125,6 +124,8 @@ TRANSCRIPT:
     )
 
     return {"title": title, "notes": notes}
+
+
 def generate_glossary(transcript: str, title: str) -> list:
     system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
 
@@ -178,9 +179,9 @@ Respond with raw JSON array only:
 
 def chat_with_lecture(transcript: str, title: str, messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
     tone_prompts = {
-        "friendly": "You are warm, encouraging, and use simple language. Celebrate progress and make studying feel approachable.",
-        "strict": "You are direct and concise. No hand-holding. Give precise answers and expect the student to keep up.",
-        "socratic": "You guide students by asking questions rather than giving direct answers. Help them think through problems themselves."
+        "friendly": "You are warm, encouraging and use simple language. Celebrate progress and be supportive.",
+        "strict": "You are direct and concise. No hand-holding. Give precise answers without unnecessary encouragement.",
+        "socratic": "You guide the student by asking questions rather than giving direct answers. Help them think through problems themselves."
     }
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a university study assistant. {tone_desc}
@@ -193,9 +194,9 @@ LECTURE CONTENT:
 
 def chat_general(messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
     tone_prompts = {
-        "friendly": "You are warm, encouraging, and use simple language. Celebrate progress and make studying feel approachable.",
-        "strict": "You are direct and concise. No hand-holding. Give precise answers and expect the student to keep up.",
-        "socratic": "You guide students by asking questions rather than giving direct answers. Help them think through problems themselves."
+        "friendly": "You are warm, encouraging and use simple language. Celebrate progress and be supportive.",
+        "strict": "You are direct and concise. No hand-holding. Give precise answers without unnecessary encouragement.",
+        "socratic": "You guide the student by asking questions rather than giving direct answers. Help them think through problems themselves."
     }
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a university study assistant. {tone_desc}"""

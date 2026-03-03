@@ -18,6 +18,7 @@ export default function Home() {
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [view, setView] = useState("library");
+  const [notesCache, setNotesCache] = useState({});
   const [userSettings, setUserSettings] = useState({
     chatbot_name: "Tutor",
     chatbot_tone: "friendly",
@@ -131,6 +132,8 @@ export default function Home() {
               subjects={subjects}
               onDelete={() => { openLibrary(); loadData(); }}
               onMoved={loadData}
+              notesCache={notesCache}
+              setNotesCache={setNotesCache}
             />
             <ChatPanel
               lectureId={selectedLectureId}
@@ -144,7 +147,6 @@ export default function Home() {
         )}
       </main>
 
-      {/* Floating chat for non-lecture views */}
       {!isLectureView && (
         <ChatPanel
           lectureId={null}

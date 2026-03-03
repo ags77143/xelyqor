@@ -8,7 +8,9 @@ import json
 import re
 
 router = APIRouter()
-client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
+
+def _get_client():
+    return Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
 
 def _parse_json(content: str):
     content = re.sub(r'^```(?:json)?\s*', '', content.strip())
@@ -22,29 +24,35 @@ def _parse_json(content: str):
                 return json.loads(match.group())
             except:
                 pass
+        match = re.search(r'\[[\s\S]*\]', content)
+        if match:
+            try:
+                return json.loads(match.group())
+            except:
+                pass
         raise ValueError("Could not parse JSON")
 
 class SummaryRequest(BaseModel):
     subject_name: str
     lecture_ids: List[str]
 
+class FlashcardsRequest(BaseModel):
+    subject_name: str
+    lecture_ids: List[str]
+
 @router.post("/summary")
 async def generate_course_summary(req: SummaryRequest):
+    client = _get_client()
     sb = get_supabase()
-    
     all_notes = []
     for lid in req.lecture_ids:
         mat = sb.table("study_materials").select("notes").eq("lecture_id", lid).single().execute()
         if mat.data and mat.data.get("notes"):
             all_notes.append(mat.data["notes"])
-    
     if not all_notes:
         raise HTTPException(status_code=400, detail="No notes found for these lectures.")
-    
     combined = "\n\n---\n\n".join(all_notes)[:12000]
-    
     system = """You are an expert academic tutor. Respond ONLY with valid JSON. No markdown, no code fences."""
-
     prompt = f"""Analyse all the notes from the subject "{req.subject_name}" and generate a course summary.
 
 Respond with this exact JSON structure:
@@ -65,12 +73,44 @@ ALL LECTURE NOTES:
 {combined}
 
 Raw JSON only:"""
-
     resp = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         max_tokens=4096,
         temperature=0.3,
+    )
+    return _parse_json(resp.choices[0].message.content.strip())
+
+
+@router.post("/flashcards")
+async def generate_course_flashcards(req: FlashcardsRequest):
+    client = _get_client()
+    sb = get_supabase()
+    all_notes = []
+    for lid in req.lecture_ids:
+        mat = sb.table("study_materials").select("notes").eq("lecture_id", lid).single().execute()
+        if mat.data and mat.data.get("notes"):
+            all_notes.append(mat.data["notes"])
+    if not all_notes:
+        raise HTTPException(status_code=400, detail="No notes found for these lectures.")
+    combined = "\n\n---\n\n".join(all_notes)[:12000]
+    system = """You are an expert academic flashcard creator. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
+    prompt = f"""For the subject "{req.subject_name}", generate 30-40 flashcards covering ALL lectures.
+
+Cover every major concept across the entire subject — not just one lecture.
+Test conceptual understanding and theory. Focus on definitions, mechanisms, principles, and how concepts relate to each other.
+Each object must have "front" (a clear conceptual question) and "back" (2-4 sentence answer).
+
+ALL LECTURE NOTES:
+{combined}
+
+Respond with raw JSON array only:
+[{{"front": "What is...?", "back": "..."}}]"""
+    resp = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        max_tokens=6000,
+        temperature=0.4,
     )
     return _parse_json(resp.choices[0].message.content.strip())
 
@@ -82,8 +122,8 @@ class StudyPlanRequest(BaseModel):
 
 @router.post("/study-plan")
 async def generate_study_plan(req: StudyPlanRequest):
+    client = _get_client()
     sb = get_supabase()
-    
     lectures_data = []
     for lid in req.lecture_ids:
         lec = sb.table("lectures").select("title").eq("id", lid).single().execute()
@@ -93,15 +133,11 @@ async def generate_study_plan(req: StudyPlanRequest):
                 "title": lec.data["title"],
                 "notes_length": len(mat.data.get("notes", "")) if mat.data else 0
             })
-    
     if not lectures_data:
         raise HTTPException(status_code=400, detail="No lectures found.")
-
     from datetime import date
     today = date.today().isoformat()
-
     system = """You are an expert study coach. Respond ONLY with valid JSON. No markdown, no code fences."""
-
     prompt = f"""Create a detailed study plan for the subject "{req.subject_name}".
 
 Today's date: {today}
@@ -129,7 +165,6 @@ Make the schedule realistic and spaced well. Include revision days closer to the
 Each day should have 3-5 specific tasks. Last 2-3 days should be pure revision.
 
 Raw JSON only:"""
-
     resp = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
@@ -145,22 +180,17 @@ async def generate_practice_exam(
     lecture_ids: str = Form(...),
     past_paper: Optional[UploadFile] = File(None),
 ):
+    client = _get_client()
     sb = get_supabase()
     ids = json.loads(lecture_ids)
-
-    # Get all notes
     all_notes = []
     for lid in ids:
         mat = sb.table("study_materials").select("notes").eq("lecture_id", lid).single().execute()
         if mat.data and mat.data.get("notes"):
             all_notes.append(mat.data["notes"])
-
     if not all_notes:
         raise HTTPException(status_code=400, detail="No notes found.")
-
     combined = "\n\n---\n\n".join(all_notes)[:8000]
-
-    # Extract past paper text if uploaded
     past_paper_text = ""
     if past_paper:
         file_bytes = await past_paper.read()
@@ -175,7 +205,6 @@ async def generate_practice_exam(
                 past_paper_text = past_paper_text[:3000]
             except:
                 pass
-
     style_context = ""
     if past_paper_text:
         style_context = f"""
@@ -184,9 +213,7 @@ Here is a past exam paper from this subject. Match its style, format, question t
 PAST PAPER:
 {past_paper_text}
 """
-
     system = """You are an expert academic exam writer. Respond ONLY with valid JSON. No markdown, no code fences."""
-
     prompt = f"""Generate a complete practice exam for the subject "{subject_name}".
 
 {style_context}
@@ -253,7 +280,6 @@ LECTURE NOTES:
 {combined}
 
 Raw JSON only:"""
-
     resp = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],

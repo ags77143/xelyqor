@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { apiGet, apiPost, apiPostForm } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { BookOpen, FileText, Calendar, Zap, ChevronRight, Clock, Upload } from "lucide-react";
+import { BookOpen, FileText, Calendar, Zap, ChevronRight, Clock, Upload, Layers } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function SubjectView({ subjectId, user, onSelectLecture }) {
@@ -12,9 +12,15 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("lectures");
+  const [sortOrder, setSortOrder] = useState("newest");
 
   const [summary, setSummary] = useState(null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+
+  const [courseFlashcards, setCourseFlashcards] = useState(null);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
+  const [fcIndex, setFcIndex] = useState(0);
+  const [flipped, setFlipped] = useState({});
 
   const [studyPlan, setStudyPlan] = useState(null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
@@ -33,7 +39,10 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
     setSummary(null);
     setStudyPlan(null);
     setPracticeExam(null);
+    setCourseFlashcards(null);
     setActiveTab("lectures");
+    setFcIndex(0);
+    setFlipped({});
 
     const load = async () => {
       const { data: sub } = await supabase.from("subjects").select("*").eq("id", subjectId).single();
@@ -44,6 +53,11 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
     };
     load();
   }, [subjectId, user]);
+
+  const sortedLectures = [...lectures].sort((a, b) => {
+    const diff = new Date(a.created_at) - new Date(b.created_at);
+    return sortOrder === "newest" ? -diff : diff;
+  });
 
   const generateSummary = async () => {
     if (lectures.length === 0) { toast.error("No lectures in this subject yet."); return; }
@@ -60,6 +74,26 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
       toast.error("Failed: " + e.message);
     } finally {
       setGeneratingSummary(false);
+    }
+  };
+
+  const generateCourseFlashcards = async () => {
+    if (lectures.length === 0) { toast.error("No lectures yet."); return; }
+    setGeneratingFlashcards(true);
+    try {
+      const result = await apiPost("/subjects/flashcards", {
+        subject_name: subject.name,
+        lecture_ids: lectures.map(l => l.id),
+      });
+      setCourseFlashcards(result);
+      setActiveTab("flashcards");
+      setFcIndex(0);
+      setFlipped({});
+      toast.success("Course flashcards generated!");
+    } catch (e) {
+      toast.error("Failed: " + e.message);
+    } finally {
+      setGeneratingFlashcards(false);
     }
   };
 
@@ -126,7 +160,7 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
 
       <div className="flex-1 overflow-y-auto p-8">
         {/* Tool buttons */}
-        <div className="grid grid-cols-3 gap-3 mb-6 max-w-3xl">
+        <div className="grid grid-cols-4 gap-3 mb-6 max-w-4xl">
           <button
             onClick={generateSummary}
             disabled={generatingSummary}
@@ -134,7 +168,17 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
           >
             {generatingSummary ? <div className="spinner" /> : <BookOpen size={22} className="text-amber" />}
             <span className="text-sm font-semibold text-ink">Course Summary</span>
-            <span className="text-xs text-ink-light text-center">Master checklist of everything to know</span>
+            <span className="text-xs text-ink-light text-center">Master checklist of everything</span>
+          </button>
+
+          <button
+            onClick={generateCourseFlashcards}
+            disabled={generatingFlashcards}
+            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all disabled:opacity-60"
+          >
+            {generatingFlashcards ? <div className="spinner" /> : <Layers size={22} className="text-amber" />}
+            <span className="text-sm font-semibold text-ink">Course Flashcards</span>
+            <span className="text-xs text-ink-light text-center">All lectures in one deck</span>
           </button>
 
           <button
@@ -152,13 +196,13 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
           >
             <Calendar size={22} className="text-amber" />
             <span className="text-sm font-semibold text-ink">Study Plan</span>
-            <span className="text-xs text-ink-light text-center">Day by day schedule to your exam</span>
+            <span className="text-xs text-ink-light text-center">Day by day schedule</span>
           </button>
         </div>
 
         {/* Practice exam upload panel */}
         {showExamUpload && (
-          <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-3xl">
+          <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-4xl">
             <h3 className="font-semibold text-ink text-sm mb-3">Generate Practice Exam</h3>
             <p className="text-xs text-ink-light mb-4">Optionally upload a past exam paper (PDF) to tailor the style.</p>
             <label className="flex items-center gap-2 cursor-pointer text-sm text-ink-light hover:text-ink transition-colors mb-4">
@@ -178,7 +222,7 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
 
         {/* Exam date input */}
         {showExamInput && (
-          <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-3xl flex items-center gap-4">
+          <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-4xl flex items-center gap-4">
             <Calendar size={18} className="text-amber flex-shrink-0" />
             <div className="flex-1">
               <label className="block text-sm font-semibold text-ink mb-1">When is your exam?</label>
@@ -200,47 +244,66 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-cream-darker mb-6 max-w-3xl">
-          {["lectures", "summary", "exam", "studyplan"].map((t) => (
+        <div className="flex gap-1 border-b border-cream-darker mb-6 max-w-4xl">
+          {["lectures", "summary", "flashcards", "exam", "studyplan"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"}`}
             >
-              {t === "summary" ? "Course Summary" : t === "studyplan" ? "Study Plan" : t === "exam" ? "Practice Exam" : "Lectures"}
+              {t === "summary" ? "Course Summary" : t === "studyplan" ? "Study Plan" : t === "exam" ? "Practice Exam" : t === "flashcards" ? "Flashcards" : "Lectures"}
             </button>
           ))}
         </div>
 
         {/* Lectures tab */}
         {activeTab === "lectures" && (
-          <div className="space-y-3 max-w-3xl">
-            {lectures.length === 0 ? (
-              <div className="text-center py-16 text-ink-light">
-                <p className="text-lg font-medium">No lectures yet</p>
-                <p className="text-sm mt-1">Upload a lecture and assign it to this subject</p>
-              </div>
-            ) : (
-              lectures.map((l) => (
-                <div
-                  key={l.id}
-                  onClick={() => onSelectLecture(l.id)}
-                  className="bg-white border border-cream-darker rounded-xl p-5 flex items-center gap-4 cursor-pointer hover:border-amber/40 hover:shadow-sm transition-all group"
+          <div className="max-w-4xl">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-ink-light">{lectures.length} lecture{lectures.length !== 1 ? "s" : ""}</p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setSortOrder("newest")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "newest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-ink text-sm truncate">{l.title}</h3>
-                    <p className="text-xs text-ink-light mt-0.5 capitalize">{l.source_type} · {new Date(l.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
-                  </div>
-                  <ChevronRight size={16} className="text-ink-light group-hover:text-amber transition-colors flex-shrink-0" />
+                  Newest
+                </button>
+                <button
+                  onClick={() => setSortOrder("oldest")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "oldest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}
+                >
+                  Oldest
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {lectures.length === 0 ? (
+                <div className="text-center py-16 text-ink-light">
+                  <p className="text-lg font-medium">No lectures yet</p>
+                  <p className="text-sm mt-1">Upload a lecture and assign it to this subject</p>
                 </div>
-              ))
-            )}
+              ) : (
+                sortedLectures.map((l) => (
+                  <div
+                    key={l.id}
+                    onClick={() => onSelectLecture(l.id)}
+                    className="bg-white border border-cream-darker rounded-xl p-5 flex items-center gap-4 cursor-pointer hover:border-amber/40 hover:shadow-sm transition-all group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-ink text-sm truncate">{l.title}</h3>
+                      <p className="text-xs text-ink-light mt-0.5 capitalize">{l.source_type} · {new Date(l.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-ink-light group-hover:text-amber transition-colors flex-shrink-0" />
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
         {/* Summary tab */}
         {activeTab === "summary" && (
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             {!summary ? (
               <div className="text-center py-16">
                 <div className="text-5xl mb-4">📋</div>
@@ -275,9 +338,56 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
           </div>
         )}
 
+        {/* Course Flashcards tab */}
+        {activeTab === "flashcards" && (
+          <div className="max-w-2xl mx-auto">
+            {!courseFlashcards ? (
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">🃏</div>
+                <h3 className="font-serif text-xl text-ink mb-2">Generate course-wide flashcards</h3>
+                <p className="text-ink-light text-sm mb-6">30–40 cards covering every concept across all {lectures.length} lectures.</p>
+                <button onClick={generateCourseFlashcards} disabled={generatingFlashcards} className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto">
+                  {generatingFlashcards ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Flashcards</>}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <button onClick={() => { setFcIndex(i => Math.max(0, i - 1)); setFlipped({}); }} disabled={fcIndex === 0} className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors">← Previous</button>
+                  <span className="text-sm text-ink-light font-medium">{fcIndex + 1} / {courseFlashcards.length}</span>
+                  <button onClick={() => { setFcIndex(i => Math.min(courseFlashcards.length - 1, i + 1)); setFlipped({}); }} disabled={fcIndex === courseFlashcards.length - 1} className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors">Next →</button>
+                </div>
+                <div className="perspective cursor-pointer" onClick={() => setFlipped(f => ({ ...f, [fcIndex]: !f[fcIndex] }))} style={{ height: 280 }}>
+                  <div className="flip-card relative w-full h-full" style={{ transform: flipped[fcIndex] ? "rotateY(180deg)" : "rotateY(0deg)", transformStyle: "preserve-3d", transition: "transform 0.5s" }}>
+                    <div className="flip-front absolute inset-0 bg-white border-2 border-amber/20 rounded-2xl flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: "hidden" }}>
+                      <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Question</div>
+                      <p className="font-serif text-xl text-ink leading-relaxed">{courseFlashcards[fcIndex]?.front}</p>
+                      <p className="text-xs text-ink-light mt-6">Click to reveal answer</p>
+                    </div>
+                    <div className="flip-back absolute inset-0 bg-amber-pale border-2 border-amber/30 rounded-2xl flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
+                      <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Answer</div>
+                      <p className="text-ink text-sm leading-relaxed">{courseFlashcards[fcIndex]?.back}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
+                  {courseFlashcards.map((_, i) => (
+                    <button key={i} onClick={() => { setFcIndex(i); setFlipped({}); }} className={`w-2 h-2 rounded-full transition-colors ${i === fcIndex ? "bg-amber" : "bg-cream-darker hover:bg-ink-light/40"}`} />
+                  ))}
+                </div>
+                <div className="text-center mt-4">
+                  <button onClick={generateCourseFlashcards} disabled={generatingFlashcards} className="text-xs text-ink-light hover:text-ink underline">
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Practice exam tab */}
         {activeTab === "exam" && (
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             {!practiceExam ? (
               <div className="text-center py-16">
                 <div className="text-5xl mb-4">📝</div>
@@ -343,7 +453,7 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
 
         {/* Study plan tab */}
         {activeTab === "studyplan" && (
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             {!studyPlan ? (
               <div className="text-center py-16">
                 <div className="text-5xl mb-4">📅</div>

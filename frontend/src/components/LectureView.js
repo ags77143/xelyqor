@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { apiGet, apiPost, apiPostForm } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Zap, Trash2, FolderInput, BookOpen, List, HelpCircle, Layers, GitFork } from "lucide-react";
 import ConceptMap from "@/components/ConceptMap";
@@ -21,7 +21,7 @@ const DEPTH_OPTIONS = [
   { id: "ontop", label: "🔥 On Top", desc: "Maximum depth" },
 ];
 
-export default function LectureView({ lectureId, user, subjects, onDelete, onMoved }) {
+export default function LectureView({ lectureId, user, subjects, onDelete, onMoved, notesCache = {}, setNotesCache }) {
   const [lecture, setLecture] = useState(null);
   const [materials, setMaterials] = useState(null);
   const [tab, setTab] = useState("notes");
@@ -47,6 +47,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     setConceptMap(null);
     setTab("notes");
     setHeaderCollapsed(false);
+    setNotesDepth("meh");
   }, [lectureId]);
 
   const loadData = async () => {
@@ -65,10 +66,13 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     }
   };
 
+  const cacheKey = (depth) => `${lectureId}__${depth}`;
+
   const regenerateNotes = async (depth) => {
     setRegeneratingNotes(true);
     try {
       const result = await apiPost(`/materials/${lectureId}/regenerate-notes`, { depth });
+      setNotesCache((c) => ({ ...c, [cacheKey(depth)]: result.notes }));
       setMaterials((m) => ({ ...m, notes: result.notes }));
       toast.success("Notes regenerated!");
     } catch (e) {
@@ -80,6 +84,10 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
 
   const handleDepthChange = (newDepth) => {
     setNotesDepth(newDepth);
+    if (notesCache[cacheKey(newDepth)]) {
+      setMaterials((m) => ({ ...m, notes: notesCache[cacheKey(newDepth)] }));
+      return;
+    }
     regenerateNotes(newDepth);
   };
 
@@ -233,7 +241,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
       >
         {tab === "notes" && (
           <div className="max-w-3xl">
-            {/* Depth switcher */}
             <div className="flex items-center gap-2 mb-6">
               <span className="text-xs text-ink-light font-medium">Depth:</span>
               <div className="flex gap-1">
@@ -256,7 +263,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               {regeneratingNotes && (
                 <div className="flex items-center gap-2 text-xs text-ink-light ml-2">
                   <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                  Regenerating notes...
+                  Regenerating...
                 </div>
               )}
             </div>

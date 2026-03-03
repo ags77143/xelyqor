@@ -17,8 +17,14 @@ export default function Home() {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [showNewLecture, setShowNewLecture] = useState(false);
-  const [view, setView] = useState("library"); // library | lecture | subject
-  const [userSettings, setUserSettings] = useState({ chatbot_name: "Tutor", chatbot_tone: "friendly", avatar_colour: "#c17b2e", display_name: "" });
+  const [view, setView] = useState("library");
+  const [userSettings, setUserSettings] = useState({
+    chatbot_name: "Tutor",
+    chatbot_tone: "friendly",
+    avatar_colour: "#c17b2e",
+    display_name: "",
+    chat_bg: null,
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -73,6 +79,7 @@ export default function Home() {
   };
 
   const currentLecture = lectures?.find(l => l.id === selectedLectureId);
+  const isLectureView = view === "lecture" && selectedLectureId;
 
   if (loading) {
     return (
@@ -116,23 +123,38 @@ export default function Home() {
             onSelectLecture={openLecture}
           />
         )}
-        {view === "lecture" && selectedLectureId && (
-          <LectureView
-            lectureId={selectedLectureId}
-            user={user}
-            subjects={subjects}
-            onDelete={() => { openLibrary(); loadData(); }}
-            onMoved={loadData}
-          />
+        {isLectureView && (
+          <div className="flex flex-1 min-w-0 overflow-hidden">
+            <LectureView
+              lectureId={selectedLectureId}
+              user={user}
+              subjects={subjects}
+              onDelete={() => { openLibrary(); loadData(); }}
+              onMoved={loadData}
+            />
+            <ChatPanel
+              lectureId={selectedLectureId}
+              lectureName={currentLecture?.title}
+              chatbotName={userSettings.chatbot_name}
+              chatbotTone={userSettings.chatbot_tone}
+              chatBg={userSettings.chat_bg}
+              inSidebar={true}
+            />
+          </div>
         )}
       </main>
 
-      <ChatPanel
-        lectureId={selectedLectureId}
-        lectureName={currentLecture?.title}
-        chatbotName={userSettings.chatbot_name}
-        chatbotTone={userSettings.chatbot_tone}
-      />
+      {/* Floating chat for non-lecture views */}
+      {!isLectureView && (
+        <ChatPanel
+          lectureId={null}
+          lectureName={null}
+          chatbotName={userSettings.chatbot_name}
+          chatbotTone={userSettings.chatbot_tone}
+          chatBg={userSettings.chat_bg}
+          inSidebar={false}
+        />
+      )}
 
       {showNewLecture && (
         <NewLectureModal

@@ -46,11 +46,11 @@ def _parse_json(content: str):
 def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
     # Scale word targets based on transcript length
     transcript_words = len(transcript.split())
-    base = min(max(transcript_words // 2, 400), 3000)  # sensible floor/ceiling
+    base = min(max(transcript_words, 800), 4000)  # sensible floor/ceiling
 
     depth_configs = {
         "cooked": {
-            "words": int(base * 0.4),
+            "words": int(base * 1.6),
             "max_tokens": 4000,
             "instruction": """SHORT MODE:
    - Define each core concept concisely with a clear 1-2 sentence definition
@@ -60,7 +60,7 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
    - No fluff, no filler"""
         },
         "meh": {
-            "words": int(base * 0.65),
+            "words": int(base * 1.8),
             "max_tokens": 10000,
             "instruction": """MEDIUM DEPTH:
    - Give a clear definition for every concept
@@ -70,7 +70,7 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
    - Use ### subheadings within major sections"""
         },
         "ontop": {
-            "words": int(base * 1.0),
+            "words": int(base * 2.0),
             "max_tokens": 16000,
             "instruction": """MAXIMUM DEPTH:
    - Give a precise academic definition for every concept

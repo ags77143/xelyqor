@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { apiGet, apiPost } from "@/lib/api";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Upload } from "lucide-react";
 import toast from "react-hot-toast";
 
 const TONES = [
-  { id: "friendly", label: "Friendly", desc: "Warm, encouraging, uses simple language" },
+  { id: "friendly", label: "Friendly", desc: "Warm, conversational, keeps it simple" },
   { id: "strict", label: "Strict", desc: "Direct, concise, no hand-holding" },
   { id: "socratic", label: "Socratic", desc: "Asks questions to guide your thinking" },
 ];
@@ -17,11 +17,13 @@ export default function SettingsPage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [chatBgPreview, setChatBgPreview] = useState(null);
   const [settings, setSettings] = useState({
     display_name: "",
     avatar_colour: "#c17b2e",
     chatbot_name: "Tutor",
     chatbot_tone: "friendly",
+    chat_bg: null,
   });
 
   useEffect(() => {
@@ -35,11 +37,25 @@ export default function SettingsPage() {
           avatar_colour: data.avatar_colour || "#c17b2e",
           chatbot_name: data.chatbot_name || "Tutor",
           chatbot_tone: data.chatbot_tone || "friendly",
+          chat_bg: data.chat_bg || null,
         });
+        if (data.chat_bg) setChatBgPreview(data.chat_bg);
       } catch (e) {}
       setLoading(false);
     });
   }, []);
+
+  const handleBgUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      setChatBgPreview(dataUrl);
+      setSettings(s => ({ ...s, chat_bg: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -72,8 +88,6 @@ export default function SettingsPage() {
           {/* Profile */}
           <div className="bg-white border border-cream-darker rounded-2xl p-6">
             <h2 className="font-serif text-xl text-ink mb-5">Profile</h2>
-
-            {/* Avatar preview */}
             <div className="flex items-center gap-4 mb-6">
               <div
                 className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold flex-shrink-0"
@@ -86,7 +100,6 @@ export default function SettingsPage() {
                 <p className="text-xs text-ink-light">{user?.email}</p>
               </div>
             </div>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-ink mb-2">Display name</label>
@@ -98,7 +111,6 @@ export default function SettingsPage() {
                   className="w-full px-4 py-2.5 rounded-xl border border-cream-darker bg-cream text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 text-sm"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-ink mb-3">Avatar colour</label>
                 <div className="flex gap-2 flex-wrap">
@@ -122,7 +134,6 @@ export default function SettingsPage() {
           {/* Chatbot */}
           <div className="bg-white border border-cream-darker rounded-2xl p-6">
             <h2 className="font-serif text-xl text-ink mb-5">AI Tutor</h2>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-ink mb-2">Tutor name</label>
@@ -134,7 +145,6 @@ export default function SettingsPage() {
                   className="w-full px-4 py-2.5 rounded-xl border border-cream-darker bg-cream text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 text-sm"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-ink mb-3">Teaching tone</label>
                 <div className="space-y-2">
@@ -154,10 +164,29 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-ink mb-2">Chat background image</label>
+                <p className="text-xs text-ink-light mb-3">Shown before your first message in the chat panel.</p>
+                <div className="flex items-start gap-4">
+                  {chatBgPreview && (
+                    <div className="relative">
+                      <img src={chatBgPreview} alt="Chat background" className="w-24 h-24 object-cover rounded-xl border border-cream-darker" />
+                      <button
+                        onClick={() => { setChatBgPreview(null); setSettings(s => ({ ...s, chat_bg: null })); }}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                      >×</button>
+                    </div>
+                  )}
+                  <label className="flex items-center gap-2 px-4 py-2.5 bg-cream border border-cream-darker rounded-xl text-sm text-ink cursor-pointer hover:bg-cream-darker transition-colors">
+                    <Upload size={14} />
+                    {chatBgPreview ? "Change image" : "Upload image"}
+                    <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Save button */}
           <button
             onClick={save}
             disabled={saving}

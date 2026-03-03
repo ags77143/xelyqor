@@ -48,61 +48,61 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
         "ontop": {
             "words": "2500+ words",
             "max_tokens": 16000,
-            "instruction": """This is MAXIMUM DEPTH mode. You must:
-   - Fully unpack every single concept — definition, underlying theory, mechanisms, how it works step by step
-   - Explain WHY things work, not just what they are
-   - Include multiple worked examples for each concept (using generic hypothetical examples, NOT examples from the transcript)
-   - Cover edge cases, exceptions, and nuances
-   - Explain connections between concepts
-   - Include real-world applications in depth
-   - Every section must have multiple subheadings
-   - End with ## Common Exam Mistakes (detailed, at least 6 points)
-   - End with ## Deep Dive Questions (5 challenging conceptual questions for self-testing)"""
+            "instruction": """MAXIMUM DEPTH. For every concept you must:
+   - Give a precise academic definition
+   - Explain the underlying mechanism and theory in full — the WHY, not just the WHAT
+   - Walk through how it works step by step
+   - Use examples from the lecture to illustrate, but always extract and state the GENERAL PRINCIPLE the example demonstrates
+   - Explain real-world applications beyond the lecture
+   - Cover edge cases, exceptions, and common misconceptions
+   - Connect concepts to each other explicitly
+   - Every major section must have multiple ### subheadings
+   - End with ## Common Exam Mistakes (at least 6 detailed points)"""
         },
         "meh": {
             "words": "1200-1500 words",
             "max_tokens": 10000,
-            "instruction": """This is MEDIUM DEPTH mode. You must:
-   - Cover every concept clearly with definition, how it works, and why it matters
-   - Include at least one generic worked example per major concept
-   - Use subheadings to organise content within sections
-   - Cover real-world applications briefly
+            "instruction": """MEDIUM DEPTH. For every concept you must:
+   - Give a clear definition
+   - Explain how it works and why it matters
+   - Use examples from the lecture to illustrate, but always state the GENERAL PRINCIPLE the example demonstrates
+   - Brief real-world application
    - End with ## Common Exam Mistakes (4-5 points)"""
         },
         "cooked": {
             "words": "500-800 words",
             "max_tokens": 4000,
-            "instruction": """This is SHORT mode. You must:
-   - Cover only the core concepts — definitions and key mechanisms
-   - Be concise but accurate
-   - Use bullet points heavily to keep things tight
-   - End with ## Key Points (5-6 bullet points of the most important things to remember)"""
+            "instruction": """SHORT MODE. You must:
+   - Define each core concept concisely
+   - One sentence on how it works
+   - Use bullet points heavily
+   - End with ## Common Exam Mistakes (3-4 points)"""
         }
     }
 
     config = depth_configs.get(depth, depth_configs["meh"])
 
-    system = """You are an expert academic tutor generating comprehensive university study notes.
+    system = """You are an expert academic tutor generating university study notes.
 Respond ONLY with a valid JSON object. No markdown, no explanation, no code fences. Just raw JSON.
 The JSON must have exactly these keys: title, notes.
-CRITICAL: Your entire response must be valid JSON. Do not truncate or cut off mid-sentence.
-CRITICAL: Never reference specific examples, case studies, or scenarios from the transcript. Teach transferable theory only. Use your own generic hypothetical examples."""
+CRITICAL: Your entire response must be valid, complete JSON. Never truncate mid-sentence.
+CRITICAL: When the lecture uses specific examples (e.g. bananas, rabbits, fictional characters), use them to illustrate concepts — but always explicitly state the general transferable principle the example is demonstrating. Students must understand the theory, not just the example."""
 
-    prompt = f"""Given this lecture transcript, generate study notes at the specified depth level.
+    prompt = f"""Given this lecture transcript, generate study notes.
 
 TARGET LENGTH: {config['words']}
 
 DEPTH INSTRUCTIONS:
 {config['instruction']}
 
-FORMATTING RULES (apply to all depth levels):
+FORMATTING RULES:
    - ## for major section headings
    - ### for subheadings within sections
-   - **bold** for key terms, important concepts, and critical facts
-   - Bullet points (- ) for lists of features, properties, or related items
-   - Numbered lists (1. 2. 3.) for processes, steps, or sequences
-   - NEVER reference specific examples from the transcript — use generic hypothetical examples only
-   - Teach the THEORY and PRINCIPLES, not the specific content of the lecture
+   - **bold** for key terms, definitions, and critical concepts
+   - Bullet points (- ) for lists of properties, features, or related items
+   - Numbered lists (1. 2. 3.) for processes or sequences
+   - When using lecture examples: use them, then follow with a sentence like "In general, this illustrates that [general principle]..."
+   - Do NOT include a Key Takeaways or Deep Dive Questions section
 
 TRANSCRIPT:
 {transcript[:8000]}
@@ -123,13 +123,13 @@ def generate_glossary(transcript: str, title: str) -> list:
     system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
 
     prompt = f"""For the lecture "{title}", generate a glossary of 15-20 key terms.
-Each item must have "term" and "definition" keys. Definitions should be 3-5 sentences explaining the concept clearly.
-Never reference specific examples from the transcript — define terms in a general, transferable way.
+Each item must have "term" and "definition" keys. Definitions should be 3-5 sentences explaining the concept clearly in general terms.
+If the lecture uses specific examples to define terms, extract the general definition — not the example-specific one.
 
 TRANSCRIPT:
 {transcript[:6000]}
 
-Respond with raw JSON array only. Example:
+Respond with raw JSON array only:
 [{{"term": "...", "definition": "..."}}, ...]"""
 
     content = _chat([{"role": "user", "content": prompt}], system)
@@ -140,13 +140,13 @@ def generate_quiz(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic quiz writer. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
 
     prompt = f"""For the lecture "{title}", generate 15-18 quiz questions.
-IMPORTANT: Test conceptual understanding and theory ONLY. Never test specific examples, case studies, names, or scenarios from the transcript — students need to learn transferable knowledge.
+Test conceptual understanding and theory. Questions can reference lecture examples but must test whether the student understands the underlying principle, not just memorised the example.
 Each object must have: question, options (array of 4 strings), correct (index 0-3), explanation, difficulty ("easy"/"medium"/"hard").
 
 NOTES:
 {notes[:8000]}
 
-Respond with raw JSON array only. Example:
+Respond with raw JSON array only:
 [{{"question": "...", "options": ["a","b","c","d"], "correct": 0, "explanation": "...", "difficulty": "medium"}}]"""
 
     content = _chat([{"role": "user", "content": prompt}], system)
@@ -157,13 +157,13 @@ def generate_flashcards(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic flashcard creator. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
 
     prompt = f"""For the lecture "{title}", generate 22-28 flashcards.
-IMPORTANT: Test conceptual understanding and theory ONLY. Never test specific examples, case studies, names, or scenarios from the transcript — focus on definitions, mechanisms, principles, and applications.
-Each object must have "front" (a clear conceptual question) and "back" (2-4 sentence answer explaining the concept with a generic hypothetical example).
+Test conceptual understanding. Cards can use lecture examples to illustrate but must test the general principle or definition, not specific numbers or details from examples.
+Each object must have "front" (a clear conceptual question) and "back" (2-4 sentence answer explaining the concept and its general application).
 
 NOTES:
 {notes[:8000]}
 
-Respond with raw JSON array only. Example:
+Respond with raw JSON array only:
 [{{"front": "What is...?", "back": "..."}}]"""
 
     content = _chat([{"role": "user", "content": prompt}], system)
@@ -182,7 +182,6 @@ You have full access to the lecture content below. Answer questions clearly and 
 
 LECTURE CONTENT:
 {transcript[:15000]}"""
-
     return _chat(messages, system)
 
 

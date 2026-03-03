@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiPostForm } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Zap, Trash2, FolderInput, BookOpen, List, HelpCircle, Layers, GitFork } from "lucide-react";
 import ConceptMap from "@/components/ConceptMap";
@@ -13,6 +13,12 @@ const TABS = [
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Layers },
   { id: "concepts", label: "Concept Map", icon: GitFork },
+];
+
+const DEPTH_OPTIONS = [
+  { id: "cooked", label: "💀 Cooked", desc: "Short & sharp" },
+  { id: "meh", label: "😐 Meh", desc: "Balanced" },
+  { id: "ontop", label: "🔥 On Top", desc: "Maximum depth" },
 ];
 
 export default function LectureView({ lectureId, user, subjects, onDelete, onMoved }) {
@@ -29,6 +35,8 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const [fcIndex, setFcIndex] = useState(0);
   const [showMove, setShowMove] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [notesDepth, setNotesDepth] = useState("meh");
+  const [regeneratingNotes, setRegeneratingNotes] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -55,6 +63,24 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     } finally {
       setLoading(false);
     }
+  };
+
+  const regenerateNotes = async (depth) => {
+    setRegeneratingNotes(true);
+    try {
+      const result = await apiPost(`/materials/${lectureId}/regenerate-notes`, { depth });
+      setMaterials((m) => ({ ...m, notes: result.notes }));
+      toast.success("Notes regenerated!");
+    } catch (e) {
+      toast.error("Failed to regenerate notes: " + e.message);
+    } finally {
+      setRegeneratingNotes(false);
+    }
+  };
+
+  const handleDepthChange = (newDepth) => {
+    setNotesDepth(newDepth);
+    regenerateNotes(newDepth);
   };
 
   const generateQuiz = async () => {
@@ -150,11 +176,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               <span className="text-xs text-ink-light capitalize">{lecture.source_type}</span>
             </div>
             <h1 className="font-serif text-2xl text-ink truncate">{lecture.title}</h1>
-            {materials.summary && (
-              <div className={`transition-all duration-300 overflow-hidden ${headerCollapsed ? "max-h-0 opacity-0" : "max-h-24 opacity-100"}`}>
-                <p className="text-ink-light text-sm mt-2 leading-relaxed line-clamp-3">{materials.summary}</p>
-              </div>
-            )}
           </div>
           <div className="flex gap-2 flex-shrink-0">
             <div className="relative">
@@ -211,8 +232,37 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
         onScroll={(e) => setHeaderCollapsed(e.target.scrollTop > 60)}
       >
         {tab === "notes" && (
-          <div className="max-w-3xl prose-notes">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{materials.notes || "No notes available."}</ReactMarkdown>
+          <div className="max-w-3xl">
+            {/* Depth switcher */}
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-xs text-ink-light font-medium">Depth:</span>
+              <div className="flex gap-1">
+                {DEPTH_OPTIONS.map(({ id, label, desc }) => (
+                  <button
+                    key={id}
+                    onClick={() => handleDepthChange(id)}
+                    disabled={regeneratingNotes}
+                    title={desc}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      notesDepth === id
+                        ? "bg-amber text-white"
+                        : "bg-cream border border-cream-darker text-ink-light hover:text-ink hover:border-amber/40"
+                    } disabled:opacity-50`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {regeneratingNotes && (
+                <div className="flex items-center gap-2 text-xs text-ink-light ml-2">
+                  <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                  Regenerating notes...
+                </div>
+              )}
+            </div>
+            <div className="prose-notes">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{materials.notes || "No notes available."}</ReactMarkdown>
+            </div>
           </div>
         )}
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiGet, apiPost } from "@/lib/api";
@@ -59,6 +59,9 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
       ]);
       setLecture(lec);
       setMaterials(mat);
+      if (mat?.notes) {
+        setNotesCache(c => ({ ...c, [`${lectureId}__meh`]: mat.notes }));
+      }
     } catch (e) {
       toast.error("Failed to load lecture: " + e.message);
     } finally {
@@ -172,7 +175,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="border-b border-cream-darker bg-white flex-shrink-0 transition-all duration-300">
+      <div className="border-b border-cream-darker bg-white flex-shrink-0">
         <div className="px-8 py-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">

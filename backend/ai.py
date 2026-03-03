@@ -44,57 +44,61 @@ def _parse_json(content: str):
 
 
 def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
+    # Scale word targets based on transcript length
+    transcript_words = len(transcript.split())
+    base = min(max(transcript_words // 2, 400), 3000)  # sensible floor/ceiling
+
     depth_configs = {
-        "ontop": {
-            "words": "2500+ words",
-            "max_tokens": 16000,
-            "instruction": """MAXIMUM DEPTH. For every concept you must:
-   - Give a precise academic definition
-   - Explain the underlying mechanism and theory in full — the WHY, not just the WHAT
-   - Walk through how it works step by step
-   - Use examples from the lecture to illustrate, but always extract and state the GENERAL PRINCIPLE the example demonstrates
-   - Explain real-world applications beyond the lecture
-   - Cover edge cases, exceptions, and common misconceptions
-   - Connect concepts to each other explicitly
-   - Every major section must have multiple ### subheadings
-   - End with ## Common Exam Mistakes (at least 6 detailed points)"""
+        "cooked": {
+            "words": int(base * 0.4),
+            "max_tokens": 4000,
+            "instruction": """SHORT MODE:
+   - Define each core concept concisely with a clear 1-2 sentence definition
+   - One short paragraph per major concept explaining how it works
+   - Use bullet points heavily to keep things tight
+   - Cover every concept from the transcript, just briefly
+   - No fluff, no filler"""
         },
         "meh": {
-            "words": "1200-1500 words",
+            "words": int(base * 0.65),
             "max_tokens": 10000,
-            "instruction": """MEDIUM DEPTH. For every concept you must:
-   - Give a clear definition
-   - Explain how it works and why it matters
-   - Use examples from the lecture to illustrate, but always state the GENERAL PRINCIPLE the example demonstrates
-   - Brief real-world application
-   - End with ## Common Exam Mistakes (4-5 points)"""
+            "instruction": """MEDIUM DEPTH:
+   - Give a clear definition for every concept
+   - Explain how it works and why it matters in a solid paragraph
+   - Use examples from the lecture to illustrate, then state the GENERAL PRINCIPLE it demonstrates
+   - Include real-world applications briefly
+   - Use ### subheadings within major sections"""
         },
-        "cooked": {
-            "words": "500-800 words",
-            "max_tokens": 4000,
-            "instruction": """SHORT MODE. You must:
-   - Define each core concept concisely
-   - One sentence on how it works
-   - Use bullet points heavily
-   - End with ## Common Exam Mistakes (3-4 points)"""
+        "ontop": {
+            "words": int(base * 1.0),
+            "max_tokens": 16000,
+            "instruction": """MAXIMUM DEPTH:
+   - Give a precise academic definition for every concept
+   - Fully explain the underlying mechanism and theory — the WHY, not just the WHAT
+   - Walk through how it works step by step
+   - Use examples from the lecture, then explicitly state the GENERAL PRINCIPLE demonstrated
+   - Cover real-world applications in depth
+   - Cover edge cases, exceptions, and common misconceptions
+   - Connect concepts to each other explicitly
+   - Every major section must have multiple ### subheadings"""
         }
     }
 
     config = depth_configs.get(depth, depth_configs["meh"])
 
-    # Call 1: get title cheaply
+    # Call 1: title
     title_system = "You are an academic assistant. Respond with ONLY a plain text title, nothing else. No quotes, no JSON, no explanation."
     title_prompt = f"Give a concise academic title for this lecture transcript in 10 words or less:\n\n{transcript[:2000]}"
     title = _chat([{"role": "user", "content": title_prompt}], title_system, model="llama-3.1-8b-instant", max_tokens=30).strip().strip('"')
 
-    # Call 2: generate notes with full token budget
+    # Call 2: notes
     notes_system = """You are an expert academic tutor generating university study notes.
 Respond with ONLY the raw markdown notes text. No JSON, no code fences, no explanation, no title — just the notes content starting directly with a ## heading.
-CRITICAL: When the lecture uses specific examples (e.g. bananas, rabbits, fictional characters), use them to illustrate concepts — but always explicitly state the general transferable principle the example is demonstrating."""
+CRITICAL: When the lecture uses specific examples (e.g. bananas, rabbits, fictional characters), use them to illustrate — but always explicitly state the general transferable principle the example demonstrates."""
 
     notes_prompt = f"""Generate study notes for this lecture.
 
-TARGET LENGTH: {config['words']}
+TARGET LENGTH: approximately {config['words']} words — scale your coverage to hit this target.
 
 DEPTH INSTRUCTIONS:
 {config['instruction']}
@@ -103,11 +107,12 @@ FORMATTING RULES:
    - ## for major section headings
    - ### for subheadings within sections
    - **bold** for key terms, definitions, and critical concepts
-   - Bullet points (- ) for lists of properties, features, or related items
+   - Bullet points (- ) for lists of properties or related items
    - Numbered lists (1. 2. 3.) for processes or sequences
-   - When using lecture examples: use them, then follow with "In general, this illustrates that [general principle]..."
-   - Do NOT include a Key Takeaways or Deep Dive Questions section
+   - When using lecture examples: use them, then write "In general, this illustrates that [general principle]..."
+   - Do NOT include Key Takeaways, Common Exam Mistakes, or Deep Dive sections
    - Start directly with the first ## heading
+   - Spend your word budget on depth and coverage, not padding
 
 TRANSCRIPT:
 {transcript[:8000]}"""
@@ -120,7 +125,6 @@ TRANSCRIPT:
     )
 
     return {"title": title, "notes": notes}
-
 def generate_glossary(transcript: str, title: str) -> list:
     system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
 

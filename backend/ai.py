@@ -82,13 +82,17 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
 
     config = depth_configs.get(depth, depth_configs["meh"])
 
-    system = """You are an expert academic tutor generating university study notes.
-Respond ONLY with a valid JSON object. No markdown, no explanation, no code fences. Just raw JSON.
-The JSON must have exactly these keys: title, notes.
-CRITICAL: Your entire response must be valid, complete JSON. Never truncate mid-sentence.
-CRITICAL: When the lecture uses specific examples (e.g. bananas, rabbits, fictional characters), use them to illustrate concepts — but always explicitly state the general transferable principle the example is demonstrating. Students must understand the theory, not just the example."""
+    # Call 1: get title cheaply
+    title_system = "You are an academic assistant. Respond with ONLY a plain text title, nothing else. No quotes, no JSON, no explanation."
+    title_prompt = f"Give a concise academic title for this lecture transcript in 10 words or less:\n\n{transcript[:2000]}"
+    title = _chat([{"role": "user", "content": title_prompt}], title_system, model="llama-3.1-8b-instant", max_tokens=30).strip().strip('"')
 
-    prompt = f"""Given this lecture transcript, generate study notes.
+    # Call 2: generate notes with full token budget
+    notes_system = """You are an expert academic tutor generating university study notes.
+Respond with ONLY the raw markdown notes text. No JSON, no code fences, no explanation, no title — just the notes content starting directly with a ## heading.
+CRITICAL: When the lecture uses specific examples (e.g. bananas, rabbits, fictional characters), use them to illustrate concepts — but always explicitly state the general transferable principle the example is demonstrating."""
+
+    notes_prompt = f"""Generate study notes for this lecture.
 
 TARGET LENGTH: {config['words']}
 
@@ -101,23 +105,21 @@ FORMATTING RULES:
    - **bold** for key terms, definitions, and critical concepts
    - Bullet points (- ) for lists of properties, features, or related items
    - Numbered lists (1. 2. 3.) for processes or sequences
-   - When using lecture examples: use them, then follow with a sentence like "In general, this illustrates that [general principle]..."
+   - When using lecture examples: use them, then follow with "In general, this illustrates that [general principle]..."
    - Do NOT include a Key Takeaways or Deep Dive Questions section
+   - Start directly with the first ## heading
 
 TRANSCRIPT:
-{transcript[:8000]}
+{transcript[:8000]}"""
 
-Respond with raw JSON only:
-{{"title": "...", "notes": "## Section\\n\\n**Term:** definition...\\n\\n- bullet\\n"}}"""
-
-    content = _chat(
-        [{"role": "user", "content": prompt}],
-        system,
+    notes = _chat(
+        [{"role": "user", "content": notes_prompt}],
+        notes_system,
         model="llama-3.3-70b-versatile",
         max_tokens=config["max_tokens"]
     )
-    return _parse_json(content)
 
+    return {"title": title, "notes": notes}
 
 def generate_glossary(transcript: str, title: str) -> list:
     system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""

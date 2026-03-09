@@ -47,7 +47,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     setConceptMap(null);
     setTab("notes");
     setHeaderCollapsed(false);
-    setNotesDepth("meh");
   }, [lectureId]);
 
   const loadData = async () => {
@@ -60,7 +59,11 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
       setLecture(lec);
       setMaterials(mat);
       if (mat?.notes) {
-        setNotesCache(c => ({ ...c, [`${lectureId}__meh`]: mat.notes }));
+        const savedDepth = mat.notes_depth || "meh";
+        setNotesDepth(savedDepth);
+        setNotesCache(c => ({ ...c, [`${lectureId}__${savedDepth}`]: mat.notes }));
+        if (mat.notes_cooked) setNotesCache(c => ({ ...c, [`${lectureId}__cooked`]: mat.notes_cooked }));
+        if (mat.notes_ontop) setNotesCache(c => ({ ...c, [`${lectureId}__ontop`]: mat.notes_ontop }));
       }
     } catch (e) {
       toast.error("Failed to load lecture: " + e.message);
@@ -238,10 +241,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
       </div>
 
       {/* Content */}
-      <div
-        className="flex-1 overflow-y-auto p-8"
-        onScroll={(e) => setHeaderCollapsed(e.target.scrollTop > 60)}
-      >
+      <div className="flex-1 overflow-y-auto p-8" onScroll={(e) => setHeaderCollapsed(e.target.scrollTop > 60)}>
         {tab === "notes" && (
           <div className="max-w-3xl">
             <div className="flex items-center gap-2 mb-6">

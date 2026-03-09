@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from db import get_supabase
 from ai import generate_quiz, generate_flashcards, generate_title_and_notes
@@ -54,29 +54,26 @@ async def gen_flashcards(lecture_id: str):
 async def regenerate_notes(lecture_id: str, req: RegenerateNotesRequest):
     sb = get_supabase()
 
-    # Check if we already have this depth saved in DB
-    mat_res = sb.table("study_materials").select("notes, notes_cooked, notes_ontop").eq("lecture_id", lecture_id).single().execute()
+    mat_res = sb.table("study_materials").select("notes, notes_cooked, notes_ontop, notes_depth").eq("lecture_id", lecture_id).single().execute()
     mat = mat_res.data
 
     if req.depth == "cooked" and mat.get("notes_cooked"):
-        return {"notes": mat["notes_cooked"]}
+        return {"notes": mat["notes_cooked"], "depth": "cooked"}
     if req.depth == "ontop" and mat.get("notes_ontop"):
-        return {"notes": mat["notes_ontop"]}
+        return {"notes": mat["notes_ontop"], "depth": "ontop"}
     if req.depth == "meh" and mat.get("notes"):
-        return {"notes": mat["notes"]}
+        return {"notes": mat["notes"], "depth": "meh"}
 
-    # Generate fresh
     lec_res = sb.table("lectures").select("raw_transcript, title").eq("id", lecture_id).single().execute()
     lecture = lec_res.data
     result = generate_title_and_notes(lecture["raw_transcript"], req.depth)
     notes = result.get("notes", "")
 
-    # Save to correct column
     if req.depth == "cooked":
         sb.table("study_materials").update({"notes_cooked": notes}).eq("lecture_id", lecture_id).execute()
     elif req.depth == "ontop":
         sb.table("study_materials").update({"notes_ontop": notes}).eq("lecture_id", lecture_id).execute()
     else:
-        sb.table("study_materials").update({"notes": notes}).eq("lecture_id", lecture_id).execute()
+        sb.table("study_materials").update({"notes": notes, "notes_depth": "meh"}).eq("lecture_id", lecture_id).execute()
 
-    return {"notes": notes}
+    return {"notes": notes, "depth": req.depth}

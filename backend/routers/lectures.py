@@ -113,6 +113,7 @@ async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, so
         "user_id": user_id,
         "summary": "",
         "notes": notes,
+	"notes_depth": depth,
         "glossary": json.dumps(glossary),
         "quiz": None,
         "flashcards": None,

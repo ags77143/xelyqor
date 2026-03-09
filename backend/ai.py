@@ -51,39 +51,76 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
         "cooked": {
             "words": int(base * 0.5),
             "max_tokens": 3000,
-            "instruction": """You are writing CONCISE study notes. Rules:
-- Each concept gets: 1 bold definition line + 2-3 bullet points max
-- Use ## for each major topic, NO ### subheadings
-- Bullet points only, minimal prose
-- Stop the moment you have covered every concept once
-- Do NOT conclude, summarise, or repeat anything"""
+            "instruction": """FORMAT: Bullet-point summary only.
+STRUCTURE:
+## [Topic]
+- **Term**: one sentence definition
+- **Term**: one sentence definition
+
+Rules:
+- No prose paragraphs at all
+- Every concept is ONE bullet point maximum
+- Examples only if concept cannot be understood without one — state the general principle the example shows, not the example itself
+- No "in general this illustrates" phrases
+- Hard stop after all concepts covered once
+- THEORY FIRST: always state what the concept IS before any example"""
         },
         "meh": {
             "words": int(base * 0.9),
             "max_tokens": 7000,
-            "instruction": """You are writing MEDIUM DEPTH study notes. Rules:
-- Each concept gets: 1 bold definition + a short paragraph explaining how/why + 3-5 bullet points
-- Use ## for major topics, ### for subtopics within them
-- For lecture examples: use them briefly, then one sentence stating the general principle
-- Stop the moment every concept is covered — no conclusions, no summaries, no repetition
-- Each concept appears ONCE only"""
+            "instruction": """FORMAT: Definition + short explanation + bullets.
+STRUCTURE:
+## [Topic]
+**Term** is defined as [1 sentence definition]. [1-2 sentence explanation of the underlying theory and mechanism — WHY it works, not just what it is].
+- key property or implication
+- key property or implication
+- brief real world application beyond the lecture
+
+### [Subtopic if needed]
+same pattern
+
+Rules:
+- THEORY FIRST: define the concept and explain the mechanism before touching any example
+- When using a lecture example: use it in ONE sentence only, then immediately state the general transferable principle it demonstrates
+- Each concept gets exactly: 1 definition + 1-2 theory sentences + 2-4 bullets
+- Hard stop after all concepts covered once
+- No conclusions, no summaries, no repetition"""
         },
         "ontop": {
             "words": int(base * 1.4),
             "max_tokens": 12000,
-            "instruction": """You are writing IN-DEPTH study notes. Rules:
-- Each concept gets: bold definition + full explanation of mechanism and theory + bullet points for properties/steps + real-world application
-- Use ## for major topics, ### for every subtopic
-- For lecture examples: explain them fully, then state the general transferable principle
-- Connect concepts to each other explicitly
-- Stop the moment every concept is covered in depth — no conclusions, no summaries, no repetition
-- Each concept appears ONCE only"""
+            "instruction": """FORMAT: Full academic notes with deep theoretical explanation.
+STRUCTURE PER CONCEPT:
+## [Topic]
+### Definition
+**Term** is [precise academic definition]. This differs from [related concept] because [theoretical distinction].
+
+### Theory & Mechanism
+[Full paragraph on the underlying theory — the WHY and HOW. Explain the economic/scientific/mathematical mechanism in full. This section must be purely theoretical with no examples.]
+
+### Key Properties
+- **Property 1**: why this property exists theoretically
+- **Property 2**: theoretical explanation
+- **Property 3**: theoretical explanation
+
+### Example & General Principle
+[Use lecture example in ONE paragraph maximum]. The general principle this demonstrates is: [transferable theoretical principle that applies universally, not just to this example].
+
+### Real World Application
+[How this theory applies in practice beyond the lecture context]
+
+Rules:
+- THEORY MUST COME BEFORE EXAMPLES — never introduce an example before the theory is fully explained
+- The Theory & Mechanism section must contain zero examples
+- Explicitly connect concepts to each other with theoretical reasoning ("This concept extends X because theoretically...")
+- Cover edge cases and misconceptions for each concept
+- Hard stop after all concepts covered in full
+- No conclusions, no summaries, no repetition"""
         }
     }
 
     config = depth_configs.get(depth, depth_configs["meh"])
 
-    # Generate title once, reused across all depths
     title_system = "You are an academic assistant. Respond with ONLY a plain text title, nothing else. No quotes, no JSON, no explanation."
     title_prompt = f"Give a concise academic title for this lecture in 8 words or less:\n\n{transcript[:1000]}"
     title = _chat(
@@ -94,18 +131,22 @@ def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
     ).strip().strip('"').strip("'")
 
     notes_system = f"""You are an expert academic note-writer. Output ONLY raw markdown. No JSON, no code fences, no preamble.
-CRITICAL RULES — violating these makes the output useless:
+
+CRITICAL RULES:
 1. Use ## for major section headings, ### for subheadings
 2. Use **bold** for every key term and definition
-3. Use bullet points (- ) for lists of properties, steps, or examples
-4. Write approximately {config['words']} words total — not more, not less
+3. Use bullet points (- ) for lists of properties, steps, or implications
+4. Write approximately {config['words']} words total
 5. Cover every concept from the transcript EXACTLY ONCE
-6. DO NOT write any conclusion, summary, recap, or closing paragraph
-7. DO NOT repeat any concept, sentence, or idea
-8. STOP writing as soon as all concepts are covered — do not pad"""
+6. THEORY BEFORE EXAMPLES — always fully explain the theoretical concept before introducing any example
+7. Examples are illustrative only — always follow with the general transferable principle
+8. DO NOT write any conclusion, summary, recap, or closing paragraph
+9. DO NOT repeat any concept, sentence, or idea
+10. STOP writing as soon as all concepts are covered"""
 
-    notes_prompt = f"""Write study notes for this lecture using these depth instructions:
+    notes_prompt = f"""Write study notes for this lecture.
 
+DEPTH FORMAT:
 {config['instruction']}
 
 TARGET: ~{config['words']} words
@@ -113,7 +154,7 @@ TARGET: ~{config['words']} words
 TRANSCRIPT:
 {transcript[:8000]}
 
-Start directly with the first ## heading. Cover everything once. Then stop."""
+Start directly with the first ## heading. Follow the format exactly. Cover everything once. Then stop."""
 
     notes = _chat(
         [{"role": "user", "content": notes_prompt}],
@@ -128,7 +169,9 @@ Start directly with the first ## heading. Cover everything once. Then stop."""
 def generate_glossary(transcript: str, title: str) -> list:
     system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
     prompt = f"""For the lecture "{title}", generate a glossary of 15-20 key terms.
-Each item must have "term" and "definition" keys. Definitions should be 2-3 sentences explaining the concept clearly in general terms.
+Each item must have "term" and "definition" keys.
+Definitions must be 2-3 sentences of pure theory — what the concept IS and why it matters.
+Do not use specific examples from the lecture in definitions — state the general theoretical definition only.
 
 TRANSCRIPT:
 {transcript[:6000]}
@@ -142,7 +185,9 @@ Respond with raw JSON array only:
 def generate_quiz(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic quiz writer. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
     prompt = f"""For the lecture "{title}", generate 15-18 quiz questions.
-Test conceptual understanding. Questions can use lecture examples but must test the underlying principle.
+Test theoretical understanding — definitions, mechanisms, and principles.
+Do NOT test specific numbers or details from lecture examples.
+Questions must test whether the student understands the underlying theory, not whether they memorised the example.
 Each object must have: question, options (array of 4 strings), correct (index 0-3), explanation, difficulty ("easy"/"medium"/"hard").
 
 NOTES:
@@ -157,8 +202,9 @@ Respond with raw JSON array only:
 def generate_flashcards(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic flashcard creator. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
     prompt = f"""For the lecture "{title}", generate 22-28 flashcards.
-Test conceptual understanding and general principles, not specific numbers or examples.
-Each object must have "front" (clear question) and "back" (2-3 sentence answer).
+Test theoretical understanding only — definitions, mechanisms, principles, and relationships between concepts.
+Never test specific numbers, names, or details from lecture examples.
+Each object must have "front" (clear theoretical question) and "back" (2-3 sentence theoretical answer stating the concept and why it matters).
 
 NOTES:
 {notes[:8000]}
@@ -171,25 +217,25 @@ Respond with raw JSON array only:
 
 def chat_with_lecture(transcript: str, title: str, messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
     tone_prompts = {
-        "friendly": "Be warm but concise. No filler. Acknowledge what they asked then answer clearly.",
-        "strict": "Be direct and precise. No encouragement. Get to the point immediately.",
-        "socratic": "Ask one focused question to guide the student to the answer themselves."
+        "friendly": "Be warm but concise. No filler phrases. Acknowledge what they asked then answer clearly. Use bullet points only when listing 3+ things. Never start with 'Great question!' or similar.",
+        "strict": "Be direct and precise. No encouragement or filler. Get to the point immediately. Short answers where possible.",
+        "socratic": "Ask one focused question to guide the student to the answer themselves. Keep it brief."
     }
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a study assistant for: "{title}". {tone_desc}
-Use bullet points only when listing 3+ things. Never start with filler like "Great question!".
+When explaining concepts always lead with theory before examples.
 LECTURE CONTENT:
 {transcript[:15000]}"""
-    return _chat(messages, system)
+    return _chat(messages, system, max_tokens=512)
 
 
 def chat_general(messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
     tone_prompts = {
-        "friendly": "Be warm but concise. No filler. Acknowledge what they asked then answer clearly.",
-        "strict": "Be direct and precise. No encouragement. Get to the point immediately.",
-        "socratic": "Ask one focused question to guide the student to the answer themselves."
+        "friendly": "Be warm but concise. No filler phrases. Acknowledge what they asked then answer clearly. Use bullet points only when listing 3+ things. Never start with 'Great question!' or similar.",
+        "strict": "Be direct and precise. No encouragement or filler. Get to the point immediately. Short answers where possible.",
+        "socratic": "Ask one focused question to guide the student to the answer themselves. Keep it brief."
     }
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a university study assistant. {tone_desc}
-Use bullet points only when listing 3+ things. Never start with filler like "Great question!"."""
-    return _chat(messages, system)
+When explaining concepts always lead with theory before examples."""
+    return _chat(messages, system, max_tokens=512)

@@ -142,7 +142,8 @@ CRITICAL RULES:
 7. Examples are illustrative only — always follow with the general transferable principle
 8. DO NOT write any conclusion, summary, recap, or closing paragraph
 9. DO NOT repeat any concept, sentence, or idea
-10. STOP writing as soon as all concepts are covered"""
+10. STOP writing as soon as all concepts are covered
+11. Write ALL mathematical expressions in LaTeX: inline as $expression$ and block as $$expression$$. Convert verbal math descriptions like "x squared plus 2x" to proper LaTeX like $x^2 + 2x$."""
 
     notes_prompt = f"""Write study notes for this lecture.
 
@@ -172,6 +173,7 @@ def generate_glossary(transcript: str, title: str) -> list:
 Each item must have "term" and "definition" keys.
 Definitions must be 2-3 sentences of pure theory — what the concept IS and why it matters.
 Do not use specific examples from the lecture in definitions — state the general theoretical definition only.
+For any mathematical terms, include the LaTeX notation in the definition where relevant.
 
 TRANSCRIPT:
 {transcript[:6000]}
@@ -186,8 +188,8 @@ def generate_quiz(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic quiz writer. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
     prompt = f"""For the lecture "{title}", generate 15-18 quiz questions.
 Test theoretical understanding — definitions, mechanisms, and principles.
-Do NOT test specific numbers or details from lecture examples.
-Questions must test whether the student understands the underlying theory, not whether they memorised the example.
+For math content, include questions that require actual calculation or equation solving, not just definitions.
+Write any math expressions in LaTeX notation inside the JSON strings using $expression$ format.
 Each object must have: question, options (array of 4 strings), correct (index 0-3), explanation, difficulty ("easy"/"medium"/"hard").
 
 NOTES:
@@ -202,9 +204,10 @@ Respond with raw JSON array only:
 def generate_flashcards(transcript: str, notes: str, title: str) -> list:
     system = """You are an expert academic flashcard creator. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
     prompt = f"""For the lecture "{title}", generate 22-28 flashcards.
-Test theoretical understanding only — definitions, mechanisms, principles, and relationships between concepts.
-Never test specific numbers, names, or details from lecture examples.
-Each object must have "front" (clear theoretical question) and "back" (2-3 sentence theoretical answer stating the concept and why it matters).
+Test theoretical understanding — definitions, mechanisms, principles, and relationships between concepts.
+For math content, include cards that test ability to recall and apply formulas and equations.
+Write any math expressions in LaTeX notation using $expression$ format.
+Each object must have "front" (clear question) and "back" (2-3 sentence answer).
 
 NOTES:
 {notes[:8000]}
@@ -224,6 +227,7 @@ def chat_with_lecture(transcript: str, title: str, messages: list, chatbot_name:
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a study assistant for: "{title}". {tone_desc}
 When explaining concepts always lead with theory before examples.
+When answering math questions write all equations in LaTeX: inline as $expression$, block as $$expression$$.
 LECTURE CONTENT:
 {transcript[:15000]}"""
     return _chat(messages, system, max_tokens=512)
@@ -237,5 +241,6 @@ def chat_general(messages: list, chatbot_name: str = "Tutor", chatbot_tone: str 
     }
     tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
     system = f"""You are {chatbot_name}, a university study assistant. {tone_desc}
-When explaining concepts always lead with theory before examples."""
+When explaining concepts always lead with theory before examples.
+When answering math questions write all equations in LaTeX: inline as $expression$, block as $$expression$$."""
     return _chat(messages, system, max_tokens=512)

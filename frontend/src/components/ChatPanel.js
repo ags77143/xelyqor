@@ -5,6 +5,9 @@ import { apiPost } from "@/lib/api";
 import toast from "react-hot-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbotTone, inSidebar = false, chatBg = null }) {
   const [open, setOpen] = useState(false);
@@ -54,19 +57,21 @@ export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbot
     }
   };
 
-  // Sidebar mode for lecture page
+  const mdProps = {
+    remarkPlugins: [remarkGfm, remarkMath],
+    rehypePlugins: [rehypeKatex],
+    className: "prose prose-xs max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0",
+  };
+
   if (inSidebar) {
     return (
       <div className="w-80 flex-shrink-0 flex flex-col border-l border-cream-darker bg-white" style={{ height: "100vh" }}>
-        {/* Header */}
         <div className="px-5 py-4 border-b border-cream-darker flex-shrink-0">
           <h3 className="font-serif text-base text-ink">{chatbotName || "Tutor"}</h3>
           <p className="text-xs text-ink-light mt-0.5">
             {lectureId ? `Asking about: ${lectureName || "this lecture"}` : "General study assistant"}
           </p>
         </div>
-
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full">
@@ -86,7 +91,7 @@ export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbot
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${m.role === "user" ? "bg-amber text-white rounded-tr-sm" : "bg-cream text-ink rounded-tl-sm"}`}>
                 {m.role === "assistant" ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-xs max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">{m.content}</ReactMarkdown>
+                  <ReactMarkdown {...mdProps}>{m.content}</ReactMarkdown>
                 ) : m.content}
               </div>
             </div>
@@ -104,8 +109,6 @@ export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbot
           )}
           <div ref={chatEndRef} />
         </div>
-
-        {/* Input */}
         <div className="p-4 border-t border-cream-darker flex-shrink-0">
           <div className="flex gap-2">
             <input
@@ -129,7 +132,6 @@ export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbot
     );
   }
 
-  // Floating mode for everywhere else
   return (
     <>
       {!open && (
@@ -167,7 +169,7 @@ export default function ChatPanel({ lectureId, lectureName, chatbotName, chatbot
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${m.role === "user" ? "bg-amber text-white rounded-tr-sm" : "bg-cream text-ink rounded-tl-sm"}`}>
                   {m.role === "assistant" ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-xs max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">{m.content}</ReactMarkdown>
+                    <ReactMarkdown {...mdProps}>{m.content}</ReactMarkdown>
                   ) : m.content}
                 </div>
               </div>

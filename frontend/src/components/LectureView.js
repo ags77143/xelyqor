@@ -2,6 +2,9 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { apiGet, apiPost } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Zap, Trash2, FolderInput, BookOpen, List, HelpCircle, Layers, GitFork } from "lucide-react";
@@ -271,7 +274,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               )}
             </div>
             <div className="prose-notes">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{materials.notes || "No notes available."}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{notesCache[cacheKey(notesDepth)] || materials.notes || "No notes available."}</ReactMarkdown>
             </div>
           </div>
         )}

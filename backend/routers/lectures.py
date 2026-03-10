@@ -38,7 +38,6 @@ async def create_from_youtube(
         transcript = extract_youtube_transcript(youtube_url)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-
     return await _create_lecture_with_materials(
         sb, user_id, subject_id, transcript, "youtube", youtube_url, lecture_name, depth
     )
@@ -81,8 +80,11 @@ async def create_from_file(
     elif filename.endswith(".pptx"):
         transcript = extract_pptx_text(file_bytes)
         source_type = "pptx"
+    elif filename.endswith(".txt"):
+        transcript = file_bytes.decode("utf-8", errors="ignore")
+        source_type = "txt"
     else:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF or PPTX.")
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF, PPTX, or TXT.")
 
     return await _create_lecture_with_materials(
         sb, user_id, subject_id, transcript, source_type, file.filename, lecture_name, depth
@@ -90,7 +92,7 @@ async def create_from_file(
 
 
 async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, source_type, source_ref, lecture_name, depth="meh"):
-    result1 = generate_title_and_notes(transcript, depth)
+    result1 = generate_title_and_notes(transcript, "meh")
     title = lecture_name or result1.get("title", "Untitled Lecture")
     notes = result1.get("notes", "")
 
@@ -113,7 +115,7 @@ async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, so
         "user_id": user_id,
         "summary": "",
         "notes": notes,
-	"notes_depth": depth,
+        "notes_depth": "meh",
         "glossary": json.dumps(glossary),
         "quiz": None,
         "flashcards": None,

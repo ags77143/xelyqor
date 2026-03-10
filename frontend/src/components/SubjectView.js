@@ -7,6 +7,12 @@ import remarkGfm from "remark-gfm";
 import { BookOpen, FileText, Calendar, Zap, ChevronRight, Clock, Upload, Layers } from "lucide-react";
 import toast from "react-hot-toast";
 
+const CONFIDENCE_OPTIONS = [
+  { id: "none", label: "Not at all", colour: "bg-red-100 border-red-300 text-red-700" },
+  { id: "somewhat", label: "Somewhat", colour: "bg-yellow-100 border-yellow-300 text-yellow-700" },
+  { id: "confident", label: "Confident", colour: "bg-green-100 border-green-300 text-green-700" },
+];
+
 export default function SubjectView({ subjectId, user, onSelectLecture }) {
   const [subject, setSubject] = useState(null);
   const [lectures, setLectures] = useState([]);
@@ -58,6 +64,11 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
     const diff = new Date(a.created_at) - new Date(b.created_at);
     return sortOrder === "newest" ? -diff : diff;
   });
+
+  const updateConfidence = async (lectureId, confidence) => {
+    setLectures(prev => prev.map(l => l.id === lectureId ? { ...l, confidence } : l));
+    await supabase.from("lectures").update({ confidence }).eq("id", lectureId);
+  };
 
   const generateSummary = async () => {
     if (lectures.length === 0) { toast.error("No lectures in this subject yet."); return; }
@@ -147,60 +158,55 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
     );
   }
 
+  const confidenceCounts = {
+    none: lectures.filter(l => !l.confidence || l.confidence === "none").length,
+    somewhat: lectures.filter(l => l.confidence === "somewhat").length,
+    confident: lectures.filter(l => l.confidence === "confident").length,
+  };
+
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header */}
       <div className="px-8 py-5 border-b border-cream-darker bg-white flex items-center gap-4 flex-shrink-0">
         <div className="w-10 h-10 rounded-xl flex-shrink-0" style={{ backgroundColor: subject?.colour || "#c17b2e" }} />
-        <div>
+        <div className="flex-1">
           <h1 className="font-serif text-2xl text-ink">{subject?.name}</h1>
           <p className="text-ink-light text-sm">{lectures.length} lecture{lectures.length !== 1 ? "s" : ""}</p>
         </div>
+        {lectures.length > 0 && (
+          <div className="flex gap-3 text-xs">
+            <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-medium">{confidenceCounts.none} not ready</span>
+            <span className="px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium">{confidenceCounts.somewhat} somewhat</span>
+            <span className="px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">{confidenceCounts.confident} confident</span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
         {/* Tool buttons */}
         <div className="grid grid-cols-4 gap-3 mb-6 max-w-4xl">
-          <button
-            onClick={generateSummary}
-            disabled={generatingSummary}
-            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all disabled:opacity-60"
-          >
+          <button onClick={generateSummary} disabled={generatingSummary} className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all disabled:opacity-60">
             {generatingSummary ? <div className="spinner" /> : <BookOpen size={22} className="text-amber" />}
             <span className="text-sm font-semibold text-ink">Course Summary</span>
             <span className="text-xs text-ink-light text-center">Master checklist of everything</span>
           </button>
-
-          <button
-            onClick={generateCourseFlashcards}
-            disabled={generatingFlashcards}
-            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all disabled:opacity-60"
-          >
+          <button onClick={generateCourseFlashcards} disabled={generatingFlashcards} className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all disabled:opacity-60">
             {generatingFlashcards ? <div className="spinner" /> : <Layers size={22} className="text-amber" />}
             <span className="text-sm font-semibold text-ink">Course Flashcards</span>
             <span className="text-xs text-ink-light text-center">All lectures in one deck</span>
           </button>
-
-          <button
-            onClick={() => { setShowExamUpload(!showExamUpload); setShowExamInput(false); }}
-            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all"
-          >
+          <button onClick={() => { setShowExamUpload(!showExamUpload); setShowExamInput(false); }} className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all">
             <FileText size={22} className="text-amber" />
             <span className="text-sm font-semibold text-ink">Practice Exam</span>
             <span className="text-xs text-ink-light text-center">Generate a full exam paper</span>
           </button>
-
-          <button
-            onClick={() => { setShowExamInput(!showExamInput); setShowExamUpload(false); }}
-            className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all"
-          >
+          <button onClick={() => { setShowExamInput(!showExamInput); setShowExamUpload(false); }} className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-cream-darker rounded-2xl hover:border-amber/40 transition-all">
             <Calendar size={22} className="text-amber" />
             <span className="text-sm font-semibold text-ink">Study Plan</span>
             <span className="text-xs text-ink-light text-center">Day by day schedule</span>
           </button>
         </div>
 
-        {/* Practice exam upload panel */}
         {showExamUpload && (
           <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-4xl">
             <h3 className="font-semibold text-ink text-sm mb-3">Generate Practice Exam</h3>
@@ -210,34 +216,20 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
               <span>{pastPaper ? pastPaper.name : "Upload past exam paper (optional)"}</span>
               <input type="file" accept=".pdf" className="hidden" onChange={(e) => setPastPaper(e.target.files[0])} />
             </label>
-            <button
-              onClick={generatePracticeExam}
-              disabled={generatingExam}
-              className="flex items-center gap-2 px-5 py-2.5 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 text-sm"
-            >
+            <button onClick={generatePracticeExam} disabled={generatingExam} className="flex items-center gap-2 px-5 py-2.5 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 text-sm">
               {generatingExam ? <><div className="spinner" /> Generating...</> : <><Zap size={14} /> Generate Exam</>}
             </button>
           </div>
         )}
 
-        {/* Exam date input */}
         {showExamInput && (
           <div className="bg-white border border-cream-darker rounded-2xl p-5 mb-6 max-w-4xl flex items-center gap-4">
             <Calendar size={18} className="text-amber flex-shrink-0" />
             <div className="flex-1">
               <label className="block text-sm font-semibold text-ink mb-1">When is your exam?</label>
-              <input
-                type="date"
-                value={examDate}
-                onChange={(e) => setExamDate(e.target.value)}
-                className="w-full px-4 py-2 rounded-xl border border-cream-darker bg-cream text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 text-sm"
-              />
+              <input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-cream-darker bg-cream text-ink focus:outline-none focus:ring-2 focus:ring-amber/40 text-sm" />
             </div>
-            <button
-              onClick={generateStudyPlan}
-              disabled={generatingPlan || !examDate}
-              className="flex items-center gap-2 px-5 py-2.5 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 text-sm flex-shrink-0"
-            >
+            <button onClick={generateStudyPlan} disabled={generatingPlan || !examDate} className="flex items-center gap-2 px-5 py-2.5 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 text-sm flex-shrink-0">
               {generatingPlan ? <><div className="spinner" /> Generating...</> : <><Zap size={14} /> Generate</>}
             </button>
           </div>
@@ -245,13 +237,9 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-cream-darker mb-6 max-w-4xl">
-          {["lectures", "summary", "flashcards", "exam", "studyplan"].map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"}`}
-            >
-              {t === "summary" ? "Course Summary" : t === "studyplan" ? "Study Plan" : t === "exam" ? "Practice Exam" : t === "flashcards" ? "Flashcards" : "Lectures"}
+          {["lectures", "confidence", "summary", "flashcards", "exam", "studyplan"].map((t) => (
+            <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === t ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"}`}>
+              {t === "summary" ? "Course Summary" : t === "studyplan" ? "Study Plan" : t === "exam" ? "Practice Exam" : t === "flashcards" ? "Flashcards" : t === "confidence" ? "Confidence" : "Lectures"}
             </button>
           ))}
         </div>
@@ -262,18 +250,8 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-ink-light">{lectures.length} lecture{lectures.length !== 1 ? "s" : ""}</p>
               <div className="flex gap-1">
-                <button
-                  onClick={() => setSortOrder("newest")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "newest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}
-                >
-                  Newest
-                </button>
-                <button
-                  onClick={() => setSortOrder("oldest")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "oldest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}
-                >
-                  Oldest
-                </button>
+                <button onClick={() => setSortOrder("newest")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "newest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}>Newest</button>
+                <button onClick={() => setSortOrder("oldest")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === "oldest" ? "bg-amber text-white" : "bg-cream border border-cream-darker text-ink-light hover:text-ink"}`}>Oldest</button>
               </div>
             </div>
             <div className="space-y-3">
@@ -284,20 +262,55 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
                 </div>
               ) : (
                 sortedLectures.map((l) => (
-                  <div
-                    key={l.id}
-                    onClick={() => onSelectLecture(l.id)}
-                    className="bg-white border border-cream-darker rounded-xl p-5 flex items-center gap-4 cursor-pointer hover:border-amber/40 hover:shadow-sm transition-all group"
-                  >
+                  <div key={l.id} onClick={() => onSelectLecture(l.id)} className="bg-white border border-cream-darker rounded-xl p-5 flex items-center gap-4 cursor-pointer hover:border-amber/40 hover:shadow-sm transition-all group">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-ink text-sm truncate">{l.title}</h3>
                       <p className="text-xs text-ink-light mt-0.5 capitalize">{l.source_type} · {new Date(l.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                    <div className={`text-xs px-2.5 py-1 rounded-full border font-medium flex-shrink-0 ${l.confidence === "confident" ? "bg-green-100 border-green-300 text-green-700" : l.confidence === "somewhat" ? "bg-yellow-100 border-yellow-300 text-yellow-700" : "bg-red-100 border-red-300 text-red-700"}`}>
+                      {l.confidence === "confident" ? "Confident" : l.confidence === "somewhat" ? "Somewhat" : "Not ready"}
                     </div>
                     <ChevronRight size={16} className="text-ink-light group-hover:text-amber transition-colors flex-shrink-0" />
                   </div>
                 ))
               )}
             </div>
+          </div>
+        )}
+
+        {/* Confidence tab */}
+        {activeTab === "confidence" && (
+          <div className="max-w-4xl">
+            <p className="text-sm text-ink-light mb-6">Track how confident you feel about each lecture. Updates instantly.</p>
+            {lectures.length === 0 ? (
+              <div className="text-center py-16 text-ink-light">No lectures yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {sortedLectures.map((l) => (
+                  <div key={l.id} className="bg-white border border-cream-darker rounded-xl p-5 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-ink text-sm truncate">{l.title}</h3>
+                      <p className="text-xs text-ink-light mt-0.5 capitalize">{l.source_type} · {new Date(l.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      {CONFIDENCE_OPTIONS.map(({ id, label, colour }) => (
+                        <button
+                          key={id}
+                          onClick={() => updateConfidence(l.id, id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-all ${
+                            (l.confidence === id || (!l.confidence && id === "none"))
+                              ? colour + " scale-105"
+                              : "bg-cream border-cream-darker text-ink-light hover:border-amber/40"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -376,9 +389,7 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
                   ))}
                 </div>
                 <div className="text-center mt-4">
-                  <button onClick={generateCourseFlashcards} disabled={generatingFlashcards} className="text-xs text-ink-light hover:text-ink underline">
-                    Regenerate
-                  </button>
+                  <button onClick={generateCourseFlashcards} disabled={generatingFlashcards} className="text-xs text-ink-light hover:text-ink underline">Regenerate</button>
                 </div>
               </div>
             )}
@@ -423,23 +434,14 @@ export default function SubjectView({ subjectId, user, onSelectLecture }) {
                           {q.type === "mcq" && q.options && (
                             <div className="space-y-2 ml-6">
                               {q.options.map((opt, oi) => (
-                                <button
-                                  key={oi}
-                                  onClick={() => setExamAnswers(a => ({ ...a, [`${si}-${qi}`]: oi }))}
-                                  className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${examAnswers[`${si}-${qi}`] === oi ? "bg-amber-pale border-2 border-amber text-amber font-medium" : "bg-cream border border-cream-darker text-ink hover:bg-cream-darker"}`}
-                                >
+                                <button key={oi} onClick={() => setExamAnswers(a => ({ ...a, [`${si}-${qi}`]: oi }))} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${examAnswers[`${si}-${qi}`] === oi ? "bg-amber-pale border-2 border-amber text-amber font-medium" : "bg-cream border border-cream-darker text-ink hover:bg-cream-darker"}`}>
                                   {opt}
                                 </button>
                               ))}
                             </div>
                           )}
                           {(q.type === "short" || q.type === "extended") && (
-                            <textarea
-                              placeholder="Write your answer here..."
-                              rows={q.type === "extended" ? 8 : 4}
-                              className="w-full ml-6 mt-2 px-4 py-3 rounded-xl border border-cream-darker bg-cream text-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
-                              style={{ width: "calc(100% - 1.5rem)" }}
-                            />
+                            <textarea placeholder="Write your answer here..." rows={q.type === "extended" ? 8 : 4} className="w-full ml-6 mt-2 px-4 py-3 rounded-xl border border-cream-darker bg-cream text-ink text-sm focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none" style={{ width: "calc(100% - 1.5rem)" }} />
                           )}
                         </div>
                       ))}

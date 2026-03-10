@@ -277,7 +277,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
               <label className="block text-sm font-semibold text-ink mb-2">Upload PDF or PPTX</label>
               <input
                 type="file"
-                accept=".pdf,.pptx"
+                accept=".pdf,.pptx,.txt"
                 onChange={(e) => setFile(e.target.files[0])}
                 className="w-full text-sm text-ink-light file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-amber-pale file:text-amber file:font-semibold hover:file:bg-amber hover:file:text-white cursor-pointer"
               />

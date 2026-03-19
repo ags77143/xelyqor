@@ -3,24 +3,55 @@ import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiGet, apiPost } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
-import { Zap, Trash2, FolderInput, Send, ChevronRight, BookOpen, List, HelpCircle, Layers, Gamepad2, BookMarked } from "lucide-react";
-import StudyDrawer from "@/components/StudyDrawer";
+import { Zap, Trash2, FolderInput, Send } from "lucide-react";
+import ConceptMap from "@/components/ConceptMap";
 
-const TABS = [
-  { id: "notes", label: "Notes", icon: BookOpen },
-  { id: "glossary", label: "Glossary", icon: List },
-  { id: "quiz", label: "Quiz", icon: HelpCircle },
-  { id: "flashcards", label: "Flashcards", icon: Layers },
+const MAIN_TABS = ["Study", "Game", "Story"];
+
+const STUDY_TABS = [
+  { id: "notes", label: "Notes" },
+  { id: "glossary", label: "Glossary" },
+  { id: "quiz", label: "Quiz" },
+  { id: "flashcards", label: "Flashcards" },
+  { id: "conceptmap", label: "Concept Map" },
+];
+
+const GAME_TABS = [
+  { id: "memory", label: "🃏 Memory cards" },
+  { id: "quizblitz", label: "⚡ Quiz blitz" },
+  { id: "cloze", label: "✏️ Cloze" },
+  { id: "truefalse", label: "↔️ True or false" },
+  { id: "wordsearch", label: "🔍 Wordsearch" },
+  { id: "crossword", label: "📐 Crossword" },
+  { id: "anagram", label: "🔀 Anagram" },
+  { id: "jeopardy", label: "🏆 Jeopardy" },
+];
+
+const STORY_TABS = [
+  { id: "lightnovel", label: "📖 Light novel" },
+  { id: "comic", label: "🎨 Comic panels" },
+  { id: "visualnovel", label: "🎮 Visual novel" },
+  { id: "cinematic", label: "🎬 Cinematic" },
+];
+
+const DEPTH_OPTIONS = [
+  { id: "cooked", label: "💀 Cooked" },
+  { id: "meh", label: "😐 Meh" },
+  { id: "ontop", label: "🔥 On Top" },
 ];
 
 export default function LectureView({ lectureId, user, subjects, onDelete, onMoved }) {
   const [lecture, setLecture] = useState(null);
   const [materials, setMaterials] = useState(null);
-  const [tab, setTab] = useState("notes");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState("");
+
+  const [mainTab, setMainTab] = useState("Study");
+  const [studyTab, setStudyTab] = useState("notes");
+  const [gameTab, setGameTab] = useState("memory");
+  const [storyTab, setStoryTab] = useState("lightnovel");
+  const [depth, setDepth] = useState("meh");
 
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState({});
@@ -28,14 +59,15 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const [flipped, setFlipped] = useState({});
   const [fcIndex, setFcIndex] = useState(0);
 
+  const [conceptData, setConceptData] = useState(null);
+  const [generatingConcept, setGeneratingConcept] = useState(false);
+
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
   const [showMove, setShowMove] = useState(false);
-  const [showDrawer, setShowDrawer] = useState(false);
-  const [drawerTab, setDrawerTab] = useState("games");
 
   useEffect(() => {
     loadData();
@@ -44,6 +76,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     setFlipped({});
     setFcIndex(0);
     setChatMessages([]);
+    setConceptData(null);
   }, [lectureId]);
 
   useEffect(() => {
@@ -71,7 +104,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     try {
       const quiz = await apiPost(`/materials/${lectureId}/generate-quiz`);
       setMaterials((m) => ({ ...m, quiz }));
-      setTab("quiz");
+      setStudyTab("quiz");
       toast.success("Quiz generated!");
     } catch (e) {
       toast.error("Failed to generate quiz: " + e.message);
@@ -85,12 +118,25 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     try {
       const flashcards = await apiPost(`/materials/${lectureId}/generate-flashcards`);
       setMaterials((m) => ({ ...m, flashcards }));
-      setTab("flashcards");
+      setStudyTab("flashcards");
       toast.success("Flashcards generated!");
     } catch (e) {
       toast.error("Failed to generate flashcards: " + e.message);
     } finally {
       setGenerating("");
+    }
+  };
+
+  const generateConceptMap = async () => {
+    setGeneratingConcept(true);
+    try {
+      const data = await apiPost(`/concepts/${lectureId}/generate`);
+      setConceptData(data);
+      toast.success("Concept map generated!");
+    } catch (e) {
+      toast.error("Failed to generate concept map: " + e.message);
+    } finally {
+      setGeneratingConcept(false);
     }
   };
 
@@ -131,6 +177,12 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     onDelete?.();
   };
 
+  const getNotesContent = () => {
+    if (depth === "cooked") return materials.notes_cooked || materials.notes;
+    if (depth === "ontop") return materials.notes_ontop || materials.notes;
+    return materials.notes;
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -146,9 +198,15 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     return <div className="flex-1 flex items-center justify-center text-ink-light">Lecture not found.</div>;
   }
 
+  const activeSubTabs = mainTab === "Study" ? STUDY_TABS : mainTab === "Game" ? GAME_TABS : STORY_TABS;
+  const activeSubTab = mainTab === "Study" ? studyTab : mainTab === "Game" ? gameTab : storyTab;
+  const setActiveSubTab = mainTab === "Study" ? setStudyTab : mainTab === "Game" ? setGameTab : setStoryTab;
+
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Header */}
         <div className="px-8 py-5 border-b border-cream-darker bg-white flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
@@ -169,20 +227,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
 
           <div className="flex gap-2 flex-shrink-0">
-            <button
-              onClick={() => { setDrawerTab("games"); setShowDrawer(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber text-white rounded-lg hover:bg-amber-light transition-colors font-semibold"
-            >
-              <Gamepad2 size={13} />
-              Play
-            </button>
-            <button
-              onClick={() => { setDrawerTab("story"); setShowDrawer(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-cream border border-cream-darker rounded-lg text-ink hover:bg-cream-darker transition-colors font-semibold"
-            >
-              <BookMarked size={13} />
-              Story
-            </button>
             <div className="relative">
               <button
                 onClick={() => setShowMove(!showMove)}
@@ -216,35 +260,73 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
         </div>
 
+        {/* Main toggles row */}
         <div className="flex border-b border-cream-darker bg-white px-8 gap-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {MAIN_TABS.map((t) => (
             <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === id ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"
+              key={t}
+              onClick={() => setMainTab(t)}
+              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                mainTab === t ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"
               }`}
             >
-              <Icon size={14} />
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub-tabs row */}
+        <div className="flex border-b border-cream-darker bg-white px-8 gap-1">
+          {activeSubTabs.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSubTab(id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeSubTab === id ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"
+              }`}
+            >
               {label}
-              {id === "quiz" && !materials.quiz && (
+              {mainTab === "Study" && id === "quiz" && !materials.quiz && (
                 <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>
               )}
-              {id === "flashcards" && !materials.flashcards && (
+              {mainTab === "Study" && id === "flashcards" && !materials.flashcards && (
+                <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>
+              )}
+              {mainTab === "Study" && id === "conceptmap" && !conceptData && (
                 <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>
               )}
             </button>
           ))}
         </div>
 
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">
-          {tab === "notes" && (
-            <div className="max-w-3xl prose-notes">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{materials.notes || "No notes available."}</ReactMarkdown>
+
+          {/* STUDY CONTENT */}
+          {mainTab === "Study" && studyTab === "notes" && (
+            <div className="max-w-3xl">
+              <div className="flex gap-2 mb-6">
+                {DEPTH_OPTIONS.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setDepth(d.id)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      depth === d.id
+                        ? "bg-amber text-white border-amber"
+                        : "bg-white border-cream-darker text-ink-light hover:border-ink-light"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              <div className="prose-notes">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{getNotesContent() || "No notes available."}</ReactMarkdown>
+              </div>
             </div>
           )}
 
-          {tab === "glossary" && (
+          {mainTab === "Study" && studyTab === "glossary" && (
             <div className="max-w-3xl space-y-4">
               {Array.isArray(materials.glossary) ? (
                 materials.glossary.map((item, i) => (
@@ -259,7 +341,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
             </div>
           )}
 
-          {tab === "quiz" && (
+          {mainTab === "Study" && studyTab === "quiz" && (
             <div className="max-w-3xl">
               {!materials.quiz ? (
                 <div className="text-center py-16">
@@ -327,7 +409,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
             </div>
           )}
 
-          {tab === "flashcards" && (
+          {mainTab === "Study" && studyTab === "flashcards" && (
             <div className="max-w-2xl mx-auto">
               {!materials.flashcards ? (
                 <div className="text-center py-16">
@@ -363,7 +445,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                       Next →
                     </button>
                   </div>
-
                   <div
                     className="perspective cursor-pointer"
                     onClick={() => setFlipped((f) => ({ ...f, [fcIndex]: !f[fcIndex] }))}
@@ -390,7 +471,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                       </div>
                     </div>
                   </div>
-
                   <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
                     {materials.flashcards.map((_, i) => (
                       <button
@@ -404,15 +484,59 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               )}
             </div>
           )}
+
+          {mainTab === "Study" && studyTab === "conceptmap" && (
+            <div className="max-w-4xl">
+              {!conceptData ? (
+                <div className="text-center py-16">
+                  <div className="text-5xl mb-4">🗺️</div>
+                  <h3 className="font-serif text-xl text-ink mb-2">Visualise how concepts connect</h3>
+                  <p className="text-ink-light text-sm mb-6">Generate a concept map showing relationships between all key ideas.</p>
+                  <button
+                    onClick={generateConceptMap}
+                    disabled={generatingConcept}
+                    className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto"
+                  >
+                    {generatingConcept ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Concept Map</>}
+                  </button>
+                </div>
+              ) : (
+                <ConceptMap nodes={conceptData.nodes} edges={conceptData.edges} />
+              )}
+            </div>
+          )}
+
+          {/* GAME CONTENT */}
+          {mainTab === "Game" && (
+            <div className="max-w-3xl">
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">🎮</div>
+                <h3 className="font-serif text-xl text-ink mb-2">{GAME_TABS.find(g => g.id === gameTab)?.label} coming soon</h3>
+                <p className="text-ink-light text-sm">Games are in development. Check back soon!</p>
+              </div>
+            </div>
+          )}
+
+          {/* STORY CONTENT */}
+          {mainTab === "Story" && (
+            <div className="max-w-3xl">
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">📖</div>
+                <h3 className="font-serif text-xl text-ink mb-2">{STORY_TABS.find(s => s.id === storyTab)?.label} coming soon</h3>
+                <p className="text-ink-light text-sm">Story mode is in development. Check back soon!</p>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
+      {/* Chat panel */}
       <div className="w-80 flex-shrink-0 border-l border-cream-darker flex flex-col bg-white">
         <div className="px-5 py-4 border-b border-cream-darker">
           <h3 className="font-serif text-base text-ink">Ask the lecture</h3>
           <p className="text-xs text-ink-light mt-0.5">AI tutor with full lecture context</p>
         </div>
-
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {chatMessages.length === 0 && (
             <div className="text-center py-8 text-xs text-ink-light leading-relaxed">
@@ -444,7 +568,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           )}
           <div ref={chatEndRef} />
         </div>
-
         <div className="p-4 border-t border-cream-darker">
           <div className="flex gap-2">
             <input
@@ -465,18 +588,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
         </div>
       </div>
-
-      <StudyDrawer
-        open={showDrawer}
-        onClose={() => setShowDrawer(false)}
-        lectureName={lecture?.title}
-        subjectName={lecture?.subjects?.name}
-        initialTab={drawerTab}
-        onLaunch={(config) => {
-          setShowDrawer(false);
-          toast.success(`${config.type === "game" ? config.mode : config.genre} coming soon!`);
-        }}
-      />
     </div>
   );
 }

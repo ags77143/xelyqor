@@ -103,10 +103,15 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const generateQuiz = async () => {
     setGenerating("quiz");
     try {
-      const quiz = await apiPost(`/materials/${lectureId}/generate-quiz`);
+      const endpoint = materials.quiz
+        ? `/materials/${lectureId}/regenerate-quiz`
+        : `/materials/${lectureId}/generate-quiz`;
+      const quiz = await apiPost(endpoint);
       setMaterials((m) => ({ ...m, quiz }));
+      setQuizAnswers({});
+      setQuizSubmitted({});
       setTab("quiz");
-      toast.success("Quiz generated!");
+      toast.success(materials.quiz ? "Quiz regenerated!" : "Quiz generated!");
     } catch (e) {
       toast.error("Failed to generate quiz: " + e.message);
     } finally {
@@ -117,10 +122,15 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const generateFlashcards = async () => {
     setGenerating("flashcards");
     try {
-      const flashcards = await apiPost(`/materials/${lectureId}/generate-flashcards`);
+      const endpoint = materials.flashcards
+        ? `/materials/${lectureId}/regenerate-flashcards`
+        : `/materials/${lectureId}/generate-flashcards`;
+      const flashcards = await apiPost(endpoint);
       setMaterials((m) => ({ ...m, flashcards }));
+      setFcIndex(0);
+      setFlipped({});
       setTab("flashcards");
-      toast.success("Flashcards generated!");
+      toast.success(materials.flashcards ? "Flashcards regenerated!" : "Flashcards generated!");
     } catch (e) {
       toast.error("Failed to generate flashcards: " + e.message);
     } finally {
@@ -306,44 +316,51 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                 </button>
               </div>
             ) : (
-              <div className="space-y-6">
-                {materials.quiz.map((q, qi) => (
-                  <div key={qi} className="bg-white border border-cream-darker rounded-xl p-6">
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-cream text-ink-light flex-shrink-0 mt-0.5">Q{qi + 1} · {q.difficulty}</span>
-                      <p className="font-medium text-ink text-sm leading-relaxed">{q.question}</p>
-                    </div>
-                    <div className="space-y-2 ml-12">
-                      {q.options.map((opt, oi) => {
-                        const selected = quizAnswers[qi] === oi;
-                        const submitted = quizSubmitted[qi];
-                        const isCorrect = oi === q.correct;
-                        let cls = "border border-cream-darker text-ink bg-cream hover:bg-cream-darker";
-                        if (submitted) {
-                          if (isCorrect) cls = "border-green-400 bg-green-50 text-green-800";
-                          else if (selected && !isCorrect) cls = "border-red-400 bg-red-50 text-red-800";
-                        } else if (selected) {
-                          cls = "border-amber bg-amber-pale text-amber";
-                        }
-                        return (
-                          <button key={oi} onClick={() => !submitted && setQuizAnswers((a) => ({ ...a, [qi]: oi }))} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${cls}`}>
-                            {String.fromCharCode(65 + oi)}. {opt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {!quizSubmitted[qi] && quizAnswers[qi] !== undefined && (
-                      <button onClick={() => setQuizSubmitted((s) => ({ ...s, [qi]: true }))} className="ml-12 mt-3 px-4 py-1.5 bg-amber text-white text-xs font-semibold rounded-lg hover:bg-amber-light transition-colors">
-                        Submit
-                      </button>
-                    )}
-                    {quizSubmitted[qi] && (
-                      <div className="ml-12 mt-3 p-3 bg-cream rounded-lg">
-                        <p className="text-xs text-ink-light leading-relaxed">{q.explanation}</p>
+              <div>
+                <div className="flex justify-end mb-4">
+                  <button onClick={generateQuiz} disabled={!!generating} className="flex items-center gap-2 px-4 py-2 bg-cream border border-cream-darker rounded-lg text-xs font-semibold text-ink hover:bg-cream-darker transition-colors disabled:opacity-60">
+                    {generating === "quiz" ? <><div className="spinner" style={{width:12,height:12,borderWidth:2}}/> Regenerating...</> : <><Zap size={13}/> Regenerate Quiz</>}
+                  </button>
+                </div>
+                <div className="space-y-6">
+                  {materials.quiz.map((q, qi) => (
+                    <div key={qi} className="bg-white border border-cream-darker rounded-xl p-6">
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-cream text-ink-light flex-shrink-0 mt-0.5">Q{qi + 1} · {q.difficulty}</span>
+                        <p className="font-medium text-ink text-sm leading-relaxed">{q.question}</p>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="space-y-2 ml-12">
+                        {q.options.map((opt, oi) => {
+                          const selected = quizAnswers[qi] === oi;
+                          const submitted = quizSubmitted[qi];
+                          const isCorrect = oi === q.correct;
+                          let cls = "border border-cream-darker text-ink bg-cream hover:bg-cream-darker";
+                          if (submitted) {
+                            if (isCorrect) cls = "border-green-400 bg-green-50 text-green-800";
+                            else if (selected && !isCorrect) cls = "border-red-400 bg-red-50 text-red-800";
+                          } else if (selected) {
+                            cls = "border-amber bg-amber-pale text-amber";
+                          }
+                          return (
+                            <button key={oi} onClick={() => !submitted && setQuizAnswers((a) => ({ ...a, [qi]: oi }))} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${cls}`}>
+                              {String.fromCharCode(65 + oi)}. {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!quizSubmitted[qi] && quizAnswers[qi] !== undefined && (
+                        <button onClick={() => setQuizSubmitted((s) => ({ ...s, [qi]: true }))} className="ml-12 mt-3 px-4 py-1.5 bg-amber text-white text-xs font-semibold rounded-lg hover:bg-amber-light transition-colors">
+                          Submit
+                        </button>
+                      )}
+                      {quizSubmitted[qi] && (
+                        <div className="ml-12 mt-3 p-3 bg-cream rounded-lg">
+                          <p className="text-xs text-ink-light leading-relaxed">{q.explanation}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -362,6 +379,11 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               </div>
             ) : (
               <div>
+                <div className="flex justify-end mb-2">
+                  <button onClick={generateFlashcards} disabled={!!generating} className="flex items-center gap-2 px-4 py-2 bg-cream border border-cream-darker rounded-lg text-xs font-semibold text-ink hover:bg-cream-darker transition-colors disabled:opacity-60">
+                    {generating === "flashcards" ? <><div className="spinner" style={{width:12,height:12,borderWidth:2}}/> Regenerating...</> : <><Zap size={13}/> Regenerate Flashcards</>}
+                  </button>
+                </div>
                 <div className="flex items-center justify-between mb-6">
                   <button onClick={() => { setFcIndex((i) => Math.max(0, i - 1)); setFlipped({}); }} disabled={fcIndex === 0} className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors">← Previous</button>
                   <span className="text-sm text-ink-light font-medium">{fcIndex + 1} / {materials.flashcards.length}</span>

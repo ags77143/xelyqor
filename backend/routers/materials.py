@@ -77,3 +77,26 @@ async def regenerate_notes(lecture_id: str, req: RegenerateNotesRequest):
         sb.table("study_materials").update({"notes": notes, "notes_depth": "meh"}).eq("lecture_id", lecture_id).execute()
 
     return {"notes": notes, "depth": req.depth}
+
+
+@router.post("/{lecture_id}/regenerate-quiz")
+async def regen_quiz(lecture_id: str):
+    sb = get_supabase()
+    mat_res = sb.table("study_materials").select("notes").eq("lecture_id", lecture_id).single().execute()
+    lec_res = sb.table("lectures").select("raw_transcript, title").eq("id", lecture_id).single().execute()
+    lecture = lec_res.data
+    notes = mat_res.data.get("notes", "")
+    quiz = generate_quiz(lecture["raw_transcript"], notes, lecture["title"])
+    sb.table("study_materials").update({"quiz": json.dumps(quiz)}).eq("lecture_id", lecture_id).execute()
+    return quiz
+
+@router.post("/{lecture_id}/regenerate-flashcards")
+async def regen_flashcards(lecture_id: str):
+    sb = get_supabase()
+    mat_res = sb.table("study_materials").select("notes").eq("lecture_id", lecture_id).single().execute()
+    lec_res = sb.table("lectures").select("raw_transcript, title").eq("id", lecture_id).single().execute()
+    lecture = lec_res.data
+    notes = mat_res.data.get("notes", "")
+    flashcards = generate_flashcards(lecture["raw_transcript"], notes, lecture["title"])
+    sb.table("study_materials").update({"flashcards": json.dumps(flashcards)}).eq("lecture_id", lecture_id).execute()
+    return flashcards

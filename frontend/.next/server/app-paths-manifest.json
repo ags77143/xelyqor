@@ -1,4 +1,9 @@
 {
-  "/page": "app/page.js",
-  "/solver/page": "app/solver/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/solver/page": "app/solver/page.js",
+  "/subject/[id]/page": "app/subject/[id]/page.js",
+  "/auth/page": "app/auth/page.js",
+  "/calendar/page": "app/calendar/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/page": "app/page.js"
 }

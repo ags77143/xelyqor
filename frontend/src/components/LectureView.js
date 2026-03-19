@@ -5,7 +5,8 @@ import remarkGfm from "remark-gfm";
 import { apiGet, apiPost } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
-import { Zap, Trash2, FolderInput, Send, ChevronRight, BookOpen, List, HelpCircle, Layers } from "lucide-react";
+import { Zap, Trash2, FolderInput, Send, ChevronRight, BookOpen, List, HelpCircle, Layers, Gamepad2, BookMarked } from "lucide-react";
+import StudyDrawer from "@/components/StudyDrawer";
 
 const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
@@ -21,22 +22,20 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState("");
 
-  // Quiz state
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState({});
 
-  // Flashcard state
   const [flipped, setFlipped] = useState({});
   const [fcIndex, setFcIndex] = useState(0);
 
-  // Chat state
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  // Move modal state
   const [showMove, setShowMove] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [drawerTab, setDrawerTab] = useState("games");
 
   useEffect(() => {
     loadData();
@@ -149,9 +148,7 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Lecture header */}
         <div className="px-8 py-5 border-b border-cream-darker bg-white flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
@@ -172,6 +169,20 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
 
           <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => { setDrawerTab("games"); setShowDrawer(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber text-white rounded-lg hover:bg-amber-light transition-colors font-semibold"
+            >
+              <Gamepad2 size={13} />
+              Play
+            </button>
+            <button
+              onClick={() => { setDrawerTab("story"); setShowDrawer(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-cream border border-cream-darker rounded-lg text-ink hover:bg-cream-darker transition-colors font-semibold"
+            >
+              <BookMarked size={13} />
+              Story
+            </button>
             <div className="relative">
               <button
                 onClick={() => setShowMove(!showMove)}
@@ -205,16 +216,13 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-cream-darker bg-white px-8 gap-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === id
-                  ? "border-amber text-amber"
-                  : "border-transparent text-ink-light hover:text-ink"
+                tab === id ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"
               }`}
             >
               <Icon size={14} />
@@ -229,7 +237,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           ))}
         </div>
 
-        {/* Tab content */}
         <div className="flex-1 overflow-y-auto p-8">
           {tab === "notes" && (
             <div className="max-w-3xl prose-notes">
@@ -337,7 +344,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                 </div>
               ) : (
                 <div>
-                  {/* Navigation */}
                   <div className="flex items-center justify-between mb-6">
                     <button
                       onClick={() => { setFcIndex((i) => Math.max(0, i - 1)); setFlipped({}); }}
@@ -358,17 +364,15 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                     </button>
                   </div>
 
-                  {/* Card */}
                   <div
                     className="perspective cursor-pointer"
                     onClick={() => setFlipped((f) => ({ ...f, [fcIndex]: !f[fcIndex] }))}
                     style={{ height: 280 }}
                   >
                     <div
-                      className={`flip-card relative w-full h-full`}
+                      className="flip-card relative w-full h-full"
                       style={{ transform: flipped[fcIndex] ? "rotateY(180deg)" : "rotateY(0deg)", transformStyle: "preserve-3d", transition: "transform 0.5s" }}
                     >
-                      {/* Front */}
                       <div
                         className="flip-front absolute inset-0 bg-white border-2 border-amber/20 rounded-2xl flex flex-col items-center justify-center p-8 text-center"
                         style={{ backfaceVisibility: "hidden" }}
@@ -377,7 +381,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                         <p className="font-serif text-xl text-ink leading-relaxed">{materials.flashcards[fcIndex]?.front}</p>
                         <p className="text-xs text-ink-light mt-6">Click to reveal answer</p>
                       </div>
-                      {/* Back */}
                       <div
                         className="flip-back absolute inset-0 bg-amber-pale border-2 border-amber/30 rounded-2xl flex flex-col items-center justify-center p-8 text-center"
                         style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
@@ -388,7 +391,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                     </div>
                   </div>
 
-                  {/* Dot navigation */}
                   <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
                     {materials.flashcards.map((_, i) => (
                       <button
@@ -405,14 +407,12 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
         </div>
       </div>
 
-      {/* Chatbot panel */}
       <div className="w-80 flex-shrink-0 border-l border-cream-darker flex flex-col bg-white">
         <div className="px-5 py-4 border-b border-cream-darker">
           <h3 className="font-serif text-base text-ink">Ask the lecture</h3>
           <p className="text-xs text-ink-light mt-0.5">AI tutor with full lecture context</p>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {chatMessages.length === 0 && (
             <div className="text-center py-8 text-xs text-ink-light leading-relaxed">
@@ -421,15 +421,10 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
             </div>
           )}
           {chatMessages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
-                  m.role === "user"
-                    ? "bg-amber text-white rounded-tr-sm"
-                    : "bg-cream text-ink rounded-tl-sm"
+                  m.role === "user" ? "bg-amber text-white rounded-tr-sm" : "bg-cream text-ink rounded-tl-sm"
                 }`}
               >
                 {m.content}
@@ -450,7 +445,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           <div ref={chatEndRef} />
         </div>
 
-        {/* Input */}
         <div className="p-4 border-t border-cream-darker">
           <div className="flex gap-2">
             <input
@@ -471,6 +465,18 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
           </div>
         </div>
       </div>
+
+      <StudyDrawer
+        open={showDrawer}
+        onClose={() => setShowDrawer(false)}
+        lectureName={lecture?.title}
+        subjectName={lecture?.subjects?.name}
+        initialTab={drawerTab}
+        onLaunch={(config) => {
+          setShowDrawer(false);
+          toast.success(`${config.type === "game" ? config.mode : config.genre} coming soon!`);
+        }}
+      />
     </div>
   );
 }

@@ -2,12 +2,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { apiGet } from "@/lib/api";
+import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import Library from "@/components/Library";
 import LectureView from "@/components/LectureView";
-import SubjectView from "@/components/SubjectView";
 import NewLectureModal from "@/components/NewLectureModal";
-import ChatPanel from "@/components/ChatPanel";
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -17,27 +16,18 @@ export default function Home() {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [showNewLecture, setShowNewLecture] = useState(false);
-  const [view, setView] = useState("library");
-  const [notesCache, setNotesCache] = useState({});
-  const [searchQuery, setSearchQuery] = useState("");
-  const [userSettings, setUserSettings] = useState({
-    chatbot_name: "Tutor",
-    chatbot_tone: "friendly",
-    avatar_colour: "#c17b2e",
-    display_name: "",
-    chat_bg: null,
-  });
+  const [view, setView] = useState("library"); // library | lecture
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { window.location.href = "/auth"; return; }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = "/auth";
+        return;
+      }
       setUser(session.user);
-      try {
-        const s = await apiGet(`/settings/${session.user.id}`);
-        setUserSettings(s);
-      } catch (e) {}
       setLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) window.location.href = "/auth";
       else setUser(session.user);
@@ -66,24 +56,12 @@ export default function Home() {
   const openLecture = (id) => {
     setSelectedLectureId(id);
     setView("lecture");
-    setSearchQuery("");
-  };
-
-  const openSubject = (id) => {
-    setSelectedSubject(id);
-    setView("subject");
-    setSelectedLectureId(null);
-    setSearchQuery("");
   };
 
   const openLibrary = () => {
     setView("library");
     setSelectedLectureId(null);
-    setSelectedSubject(null);
   };
-
-  const currentLecture = lectures?.find(l => l.id === selectedLectureId);
-  const isLectureView = view === "lecture" && selectedLectureId;
 
   if (loading) {
     return (
@@ -94,75 +72,43 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex bg-cream">
-      <Sidebar
-        subjects={subjects}
-        lectures={lectures}
-        selectedSubject={selectedSubject}
-        onSelectSubject={openSubject}
-        onSelectLecture={openLecture}
-        selectedLectureId={selectedLectureId}
+    <div className="min-h-screen flex flex-col bg-cream">
+      <Navbar
+        user={user}
         onNewLecture={() => setShowNewLecture(true)}
         onLibrary={openLibrary}
-        user={user}
-        userSettings={userSettings}
-        onDeleteSubject={loadData}
-        onDeleteLecture={() => { openLibrary(); loadData(); }}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
       />
 
-      <main className="flex-1 flex min-w-0 overflow-hidden" style={{ height: "100vh" }}>
-        {view === "library" && (
-          <Library
-            lectures={lectures}
-            subjects={subjects}
-            selectedSubject={selectedSubject}
-            onSelect={openLecture}
-            onDelete={loadData}
-            searchQuery={searchQuery}
-          />
-        )}
-        {view === "subject" && selectedSubject && (
-          <SubjectView
-            subjectId={selectedSubject}
-            user={user}
-            onSelectLecture={openLecture}
-          />
-        )}
-        {isLectureView && (
-          <div className="flex flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0" style={{ height: "calc(100vh - 56px)" }}>
+        <Sidebar
+          subjects={subjects}
+          lectures={lectures}
+          selectedSubject={selectedSubject}
+          onSelectSubject={(id) => { setSelectedSubject(id); setView("library"); setSelectedLectureId(null); }}
+          onSelectLecture={openLecture}
+          selectedLectureId={selectedLectureId}
+        />
+
+        <main className="flex-1 flex min-w-0 overflow-hidden">
+          {view === "library" || !selectedLectureId ? (
+            <Library
+              lectures={lectures}
+              subjects={subjects}
+              selectedSubject={selectedSubject}
+              onSelect={openLecture}
+              onDelete={loadData}
+            />
+          ) : (
             <LectureView
               lectureId={selectedLectureId}
               user={user}
               subjects={subjects}
               onDelete={() => { openLibrary(); loadData(); }}
               onMoved={loadData}
-              notesCache={notesCache}
-              setNotesCache={setNotesCache}
             />
-            <ChatPanel
-              lectureId={selectedLectureId}
-              lectureName={currentLecture?.title}
-              chatbotName={userSettings.chatbot_name}
-              chatbotTone={userSettings.chatbot_tone}
-              chatBg={userSettings.chat_bg}
-              inSidebar={true}
-            />
-          </div>
-        )}
-      </main>
-
-      {!isLectureView && (
-        <ChatPanel
-          lectureId={null}
-          lectureName={null}
-          chatbotName={userSettings.chatbot_name}
-          chatbotTone={userSettings.chatbot_tone}
-          chatBg={userSettings.chat_bg}
-          inSidebar={false}
-        />
-      )}
+          )}
+        </main>
+      </div>
 
       {showNewLecture && (
         <NewLectureModal

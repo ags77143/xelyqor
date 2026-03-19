@@ -1,94 +1,60 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { apiGet } from "@/lib/api";
-import { Plus, Library, LogOut, Lightbulb, Settings, Calendar } from "lucide-react";
+import { Plus, Library, LogOut } from "lucide-react";
 
-export default function Navbar({ onNew, onLibrary }) {
-  const [user, setUser] = useState(null);
-  const [settings, setSettings] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        setUser(session.user);
-        try {
-          const s = await apiGet(`/settings/${session.user.id}`);
-          setSettings(s);
-        } catch (e) {}
-      }
-    });
-  }, []);
+export default function Navbar({ user, onNewLecture, onLibrary }) {
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/";
+    window.location.href = "/auth";
   };
 
   return (
-    <nav className="h-14 bg-white border-b border-cream-darker flex items-center justify-between px-6 flex-shrink-0">
-      <div className="flex items-center gap-6">
-        <h1 className="font-serif text-xl text-ink">
-          <span className="text-amber">X</span>elyqor
-        </h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onNew}
-            className="flex items-center gap-2 px-4 py-1.5 bg-amber text-white rounded-lg text-sm font-semibold hover:bg-amber-light transition-colors"
-          >
-            <Plus size={15} />
-            New Lecture
-          </button>
-          <button
-            onClick={onLibrary}
-            className="flex items-center gap-2 px-4 py-1.5 bg-cream border border-cream-darker text-ink rounded-lg text-sm font-semibold hover:bg-cream-darker transition-colors"
-          >
-            <Library size={15} />
-            My Library
-          </button>
-          <button
-            onClick={() => window.location.href = "/solver"}
-            className="flex items-center gap-2 px-4 py-1.5 bg-cream border border-cream-darker text-ink rounded-lg text-sm font-semibold hover:bg-cream-darker transition-colors"
-          >
-            <Lightbulb size={15} />
-            Solver
-          </button>
-          <button
-            onClick={() => window.location.href = "/calendar"}
-            className="flex items-center gap-2 px-4 py-1.5 bg-cream border border-cream-darker text-ink rounded-lg text-sm font-semibold hover:bg-cream-darker transition-colors"
-          >
-            <Calendar size={15} />
-            Calendar
-          </button>
-        </div>
+    <nav className="h-14 bg-white border-b border-cream-darker flex items-center px-6 gap-4 z-50 sticky top-0">
+      {/* Logo */}
+      <div className="font-serif text-2xl font-bold text-ink flex-shrink-0">
+        <span className="text-amber">I</span>nqlo
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Center buttons */}
+      <div className="flex-1 flex justify-center gap-3">
         <button
-          onClick={() => window.location.href = "/settings"}
-          className="flex items-center gap-2 px-3 py-1.5 bg-cream border border-cream-darker text-ink rounded-lg text-sm hover:bg-cream-darker transition-colors"
+          onClick={onNewLecture}
+          className="flex items-center gap-2 px-4 py-1.5 bg-amber text-white rounded-lg text-sm font-semibold hover:bg-amber-light transition-colors"
         >
-          <Settings size={14} />
+          <Plus size={15} />
+          New Lecture
         </button>
-        {user && (
-          <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-              style={{ backgroundColor: settings?.avatar_colour || "#c17b2e" }}
+        <button
+          onClick={onLibrary}
+          className="flex items-center gap-2 px-4 py-1.5 bg-cream border border-cream-darker text-ink rounded-lg text-sm font-semibold hover:bg-cream-darker transition-colors"
+        >
+          <Library size={15} />
+          My Library
+        </button>
+      </div>
+
+      {/* User */}
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="text-sm text-ink-light hover:text-ink transition-colors max-w-[180px] truncate"
+        >
+          {user?.email}
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-2 bg-white border border-cream-darker rounded-xl shadow-lg p-1 min-w-[140px] z-50">
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-ink hover:bg-cream rounded-lg transition-colors"
             >
-              {(settings?.display_name || user.email || "?")[0].toUpperCase()}
-            </div>
-            <span className="text-sm text-ink-light hidden md:block truncate max-w-32">
-              {settings?.display_name || user.email}
-            </span>
+              <LogOut size={14} />
+              Sign out
+            </button>
           </div>
         )}
-        <button
-          onClick={signOut}
-          className="flex items-center gap-2 px-3 py-1.5 text-ink-light hover:text-ink text-sm transition-colors"
-        >
-          <LogOut size={14} />
-        </button>
       </div>
     </nav>
   );

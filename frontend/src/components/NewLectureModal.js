@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { X, Youtube, FileText, Upload, Mic, Square } from "lucide-react";
+import { X, Youtube, FileText, Upload } from "lucide-react";
 import { apiPostForm } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -9,33 +9,12 @@ const SOURCE_TYPES = [
   { id: "youtube", label: "YouTube URL", icon: Youtube },
   { id: "transcript", label: "Paste Transcript", icon: FileText },
   { id: "file", label: "Upload File (PDF/PPTX)", icon: Upload },
-  { id: "recording", label: "Record Lecture", icon: Mic },
-];
-
-const DEPTH_OPTIONS = [
-  {
-    id: "ontop",
-    label: "On top of shit",
-    desc: "Maximum depth — every concept fully unpacked",
-    emoji: "🔥",
-  },
-  {
-    id: "meh",
-    label: "Meh",
-    desc: "Solid coverage — balanced depth and length",
-    emoji: "👌",
-  },
-  {
-    id: "cooked",
-    label: "Cooked",
-    desc: "Short and sharp — key points only",
-    emoji: "💀",
-  },
 ];
 
 const SUBJECT_COLOURS = ["#c17b2e", "#2e7bc1", "#6b4fc8", "#2ec17b", "#c12e5a", "#c18b2e"];
 
 export default function NewLectureModal({ subjects, user, onClose, onCreated }) {
+  const [step, setStep] = useState(1); // 1=type, 2=name+subject, 3=content
   const [sourceType, setSourceType] = useState("");
   const [lectureName, setLectureName] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -43,44 +22,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [file, setFile] = useState(null);
-  const [depth, setDepth] = useState("meh");
   const [loading, setLoading] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [timerInterval, setTimerInterval] = useState(null);
-
-  const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const options = { mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 16000 };
-    const mr = new MediaRecorder(stream, options);
-    const chunks = [];
-    mr.ondataavailable = (e) => chunks.push(e.data);
-    mr.onstop = () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      setAudioBlob(blob);
-    };
-    mr.start(10000);
-    setMediaRecorder(mr);
-    setRecording(true);
-    setRecordingTime(0);
-    const interval = setInterval(() => setRecordingTime((t) => t + 1), 1000);
-    setTimerInterval(interval);
-  };
-
-  const stopRecording = () => {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach((t) => t.stop());
-    setRecording(false);
-    clearInterval(timerInterval);
-  };
-
-  const formatTime = (secs) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
 
   const handleSubmit = async () => {
     if (!sourceType || !lectureName.trim()) {
@@ -90,9 +32,10 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
 
     setLoading(true);
     try {
-      let resolvedSubjectId = (subjectId === "__new__" || subjectId === "") ? "" : subjectId;
+      let resolvedSubjectId = subjectId;
 
-      if (!resolvedSubjectId && newSubjectName.trim()) {
+      // Create new subject if needed
+      if (!subjectId && newSubjectName.trim()) {
         const colour = SUBJECT_COLOURS[Math.floor(Math.random() * SUBJECT_COLOURS.length)];
         const { data } = await supabase.from("subjects").insert({
           user_id: user.id,
@@ -112,7 +55,6 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
       fd.append("user_id", user.id);
       fd.append("subject_id", resolvedSubjectId);
       fd.append("lecture_name", lectureName.trim());
-      fd.append("depth", depth);
 
       let endpoint = "";
       if (sourceType === "youtube") {
@@ -121,14 +63,6 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
       } else if (sourceType === "transcript") {
         fd.append("transcript", transcript.trim());
         endpoint = "/lectures/from-transcript";
-      } else if (sourceType === "recording") {
-        if (!audioBlob) {
-          toast.error("Please record audio first.");
-          setLoading(false);
-          return;
-        }
-        fd.append("audio", audioBlob, "recording.webm");
-        endpoint = "/lectures/from-recording";
       } else {
         fd.append("file", file);
         endpoint = "/lectures/from-file";
@@ -148,7 +82,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-cream-darker">
           <h2 className="font-serif text-xl text-ink">New Lecture</h2>
@@ -158,7 +92,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Source type */}
+          {/* Step 1: Source type */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">1. Lecture source</label>
             <div className="grid grid-cols-3 gap-2">
@@ -179,7 +113,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
             </div>
           </div>
 
-          {/* Lecture name */}
+          {/* Step 2: Name */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">2. Lecture name</label>
             <input
@@ -191,7 +125,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
             />
           </div>
 
-          {/* Subject */}
+          {/* Step 3: Subject */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-2">3. Subject folder</label>
             <select
@@ -219,33 +153,7 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
             )}
           </div>
 
-          {/* Depth selector */}
-          <div>
-            <label className="block text-sm font-semibold text-ink mb-2">4. Notes depth</label>
-            <div className="flex flex-col gap-2">
-              {DEPTH_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => setDepth(opt.id)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
-                    depth === opt.id
-                      ? "border-amber bg-amber-pale"
-                      : "border-cream-darker hover:border-amber/40"
-                  }`}
-                >
-                  <span className="text-xl">{opt.emoji}</span>
-                  <div>
-                    <div className={`text-sm font-semibold ${depth === opt.id ? "text-amber" : "text-ink"}`}>
-                      {opt.label}
-                    </div>
-                    <div className="text-xs text-ink-light">{opt.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Content input */}
+          {/* Content input based on source type */}
           {sourceType === "youtube" && (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">YouTube URL</label>
@@ -277,64 +185,10 @@ export default function NewLectureModal({ subjects, user, onClose, onCreated }) 
               <label className="block text-sm font-semibold text-ink mb-2">Upload PDF or PPTX</label>
               <input
                 type="file"
-                accept=".pdf,.pptx,.txt"
+                accept=".pdf,.pptx"
                 onChange={(e) => setFile(e.target.files[0])}
                 className="w-full text-sm text-ink-light file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-amber-pale file:text-amber file:font-semibold hover:file:bg-amber hover:file:text-white cursor-pointer"
               />
-            </div>
-          )}
-
-          {sourceType === "recording" && (
-            <div>
-              <label className="block text-sm font-semibold text-ink mb-2">Record Lecture</label>
-              <div className="flex flex-col items-center gap-4 p-6 bg-cream rounded-xl border border-cream-darker">
-                {!recording && !audioBlob && (
-                  <button
-                    onClick={startRecording}
-                    className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors"
-                  >
-                    <Mic size={18} />
-                    Start Recording
-                  </button>
-                )}
-                {recording && (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                      <span className="font-mono text-lg font-bold text-ink">{formatTime(recordingTime)}</span>
-                    </div>
-                    <div className="flex gap-1 items-end h-8">
-                      {Array.from({ length: 12 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-1.5 bg-amber rounded-full animate-pulse"
-                          style={{ height: `${Math.random() * 100}%`, animationDelay: `${i * 0.1}s` }}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={stopRecording}
-                      className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
-                    >
-                      <Square size={18} />
-                      Stop Recording
-                    </button>
-                  </>
-                )}
-                {!recording && audioBlob && (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="flex items-center gap-2 text-green-600 font-semibold text-sm">
-                      ✅ Recording ready — {formatTime(recordingTime)}
-                    </div>
-                    <button
-                      onClick={() => { setAudioBlob(null); setRecordingTime(0); }}
-                      className="text-xs text-ink-light hover:text-ink underline"
-                    >
-                      Record again
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </div>

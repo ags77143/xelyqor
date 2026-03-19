@@ -1,246 +1,134 @@
 import os
-import json
-import re
 from groq import Groq
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
 
-def _chat(messages: list, system: str, model: str = "llama-3.1-8b-instant", max_tokens: int = 4096) -> str:
+def _chat(messages: list, system: str) -> str:
     resp = client.chat.completions.create(
-        model=model,
+        model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": system}] + messages,
-        max_tokens=max_tokens,
+        max_tokens=4096,
         temperature=0.7,
     )
     return resp.choices[0].message.content.strip()
 
-def _parse_json(content: str):
-    content = re.sub(r'^```(?:json)?\s*', '', content.strip())
-    content = re.sub(r'\s*```$', '', content.strip())
-    try:
-        return json.loads(content)
-    except Exception:
-        pass
-    match = re.search(r'\{[\s\S]*\}', content)
-    if match:
-        try:
-            return json.loads(match.group())
-        except Exception:
-            pass
-    try:
-        truncated = content.strip()
-        if truncated.startswith('{') and not truncated.endswith('}'):
-            truncated += '"}'
-            return json.loads(truncated)
-    except Exception:
-        pass
-    match = re.search(r'\[[\s\S]*\]', content)
-    if match:
-        try:
-            return json.loads(match.group())
-        except Exception:
-            pass
-    raise ValueError(f"Could not parse JSON from AI response: {content[:200]}")
 
+def generate_title_summary_notes(transcript: str) -> dict:
+    system = """You are an expert academic tutor generating comprehensive study materials for university students.
+Your job is to produce exceptionally thorough, exam-ready study notes. Do NOT summarise — teach.
+Respond ONLY in valid JSON with keys: title, summary, notes."""
 
-def generate_title_and_notes(transcript: str, depth: str = "meh") -> dict:
-    transcript_words = len(transcript.split())
-    base = min(max(transcript_words, 800), 4000)
+    prompt = f"""Given this lecture transcript, generate:
+1. title: A concise, descriptive title for this lecture (no quotes)
+2. summary: A 6-8 sentence executive summary of the entire lecture covering all major themes
+3. notes: COMPREHENSIVE study notes — MINIMUM 1200 words. 
 
-    depth_configs = {
-        "cooked": {
-            "words": int(base * 0.5),
-            "max_tokens": 3000,
-            "instruction": """FORMAT: Bullet-point summary only.
-STRUCTURE:
-## [Topic]
-- **Term**: one sentence definition
-- **Term**: one sentence definition
-
-Rules:
-- No prose paragraphs at all
-- Every concept is ONE bullet point maximum
-- Examples only if concept cannot be understood without one — state the general principle the example shows, not the example itself
-- No "in general this illustrates" phrases
-- Hard stop after all concepts covered once
-- THEORY FIRST: always state what the concept IS before any example"""
-        },
-        "meh": {
-            "words": int(base * 0.9),
-            "max_tokens": 7000,
-            "instruction": """FORMAT: Definition + short explanation + bullets.
-STRUCTURE:
-## [Topic]
-**Term** is defined as [1 sentence definition]. [1-2 sentence explanation of the underlying theory and mechanism — WHY it works, not just what it is].
-- key property or implication
-- key property or implication
-- brief real world application beyond the lecture
-
-### [Subtopic if needed]
-same pattern
-
-Rules:
-- THEORY FIRST: define the concept and explain the mechanism before touching any example
-- When using a lecture example: use it in ONE sentence only, then immediately state the general transferable principle it demonstrates
-- Each concept gets exactly: 1 definition + 1-2 theory sentences + 2-4 bullets
-- Hard stop after all concepts covered once
-- No conclusions, no summaries, no repetition"""
-        },
-        "ontop": {
-            "words": int(base * 1.4),
-            "max_tokens": 12000,
-            "instruction": """FORMAT: Full academic notes with deep theoretical explanation.
-STRUCTURE PER CONCEPT:
-## [Topic]
-### Definition
-**Term** is [precise academic definition]. This differs from [related concept] because [theoretical distinction].
-
-### Theory & Mechanism
-[Full paragraph on the underlying theory — the WHY and HOW. Explain the economic/scientific/mathematical mechanism in full. This section must be purely theoretical with no examples.]
-
-### Key Properties
-- **Property 1**: why this property exists theoretically
-- **Property 2**: theoretical explanation
-- **Property 3**: theoretical explanation
-
-### Example & General Principle
-[Use lecture example in ONE paragraph maximum]. The general principle this demonstrates is: [transferable theoretical principle that applies universally, not just to this example].
-
-### Real World Application
-[How this theory applies in practice beyond the lecture context]
-
-Rules:
-- THEORY MUST COME BEFORE EXAMPLES — never introduce an example before the theory is fully explained
-- The Theory & Mechanism section must contain zero examples
-- Explicitly connect concepts to each other with theoretical reasoning ("This concept extends X because theoretically...")
-- Cover edge cases and misconceptions for each concept
-- Hard stop after all concepts covered in full
-- No conclusions, no summaries, no repetition"""
-        }
-    }
-
-    config = depth_configs.get(depth, depth_configs["meh"])
-
-    title_system = "You are an academic assistant. Respond with ONLY a plain text title, nothing else. No quotes, no JSON, no explanation."
-    title_prompt = f"Give a concise academic title for this lecture in 8 words or less:\n\n{transcript[:1000]}"
-    title = _chat(
-        [{"role": "user", "content": title_prompt}],
-        title_system,
-        model="llama-3.1-8b-instant",
-        max_tokens=20
-    ).strip().strip('"').strip("'")
-
-    notes_system = f"""You are an expert academic note-writer. Output ONLY raw markdown. No JSON, no code fences, no preamble.
-
-CRITICAL RULES:
-1. Use ## for major section headings, ### for subheadings
-2. Use **bold** for every key term and definition
-3. Use bullet points (- ) for lists of properties, steps, or implications
-4. Write approximately {config['words']} words total
-5. Cover every concept from the transcript EXACTLY ONCE
-6. THEORY BEFORE EXAMPLES — always fully explain the theoretical concept before introducing any example
-7. Examples are illustrative only — always follow with the general transferable principle
-8. DO NOT write any conclusion, summary, recap, or closing paragraph
-9. DO NOT repeat any concept, sentence, or idea
-10. STOP writing as soon as all concepts are covered
-11. Write ALL mathematical expressions in LaTeX: inline as $expression$ and block as $$expression$$. Convert verbal math descriptions like "x squared plus 2x" to proper LaTeX like $x^2 + 2x$."""
-
-    notes_prompt = f"""Write study notes for this lecture.
-
-DEPTH FORMAT:
-{config['instruction']}
-
-TARGET: ~{config['words']} words
+Notes MUST follow this structure:
+- Use ## and ### markdown headers
+- Cover EVERY concept from the lecture in depth
+- For each concept: precise definition, how it works, worked examples, why it matters, connections to other concepts, real-world applications, common exam mistakes
+- End with a ## Key Takeaways section summarising the most important points
+- Write as if teaching a student from scratch who needs to pass an exam using ONLY these notes
 
 TRANSCRIPT:
-{transcript[:8000]}
+{transcript[:12000]}
 
-Start directly with the first ## heading. Follow the format exactly. Cover everything once. Then stop."""
+Respond with valid JSON only."""
 
-    notes = _chat(
-        [{"role": "user", "content": notes_prompt}],
-        notes_system,
-        model="llama-3.3-70b-versatile",
-        max_tokens=config["max_tokens"]
-    )
-
-    return {"title": title, "notes": notes}
+    content = _chat([{"role": "user", "content": prompt}], system)
+    # Strip markdown code fences if present
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])
+    import json
+    return json.loads(content)
 
 
 def generate_glossary(transcript: str, title: str) -> list:
-    system = """You are an expert academic tutor. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
-    prompt = f"""For the lecture "{title}", generate a glossary of 15-20 key terms.
-Each item must have "term" and "definition" keys.
-Definitions must be 2-3 sentences of pure theory — what the concept IS and why it matters.
-Do not use specific examples from the lecture in definitions — state the general theoretical definition only.
-For any mathematical terms, include the LaTeX notation in the definition where relevant.
+    system = """You are an expert academic tutor. Respond ONLY in valid JSON — a list of objects."""
+
+    prompt = f"""For this lecture titled "{title}", generate a glossary of 15-20 key terms.
+
+Each term object must have:
+- term: the key term or concept
+- definition: 3-5 sentences explaining the term including context, significance, and relationships to other concepts in this lecture
 
 TRANSCRIPT:
-{transcript[:6000]}
+{transcript[:12000]}
 
-Respond with raw JSON array only:
-[{{"term": "...", "definition": "..."}}, ...]"""
+Respond with a JSON array of objects with keys "term" and "definition" only."""
+
     content = _chat([{"role": "user", "content": prompt}], system)
-    return _parse_json(content)
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])
+    import json
+    return json.loads(content)
 
 
 def generate_quiz(transcript: str, notes: str, title: str) -> list:
-    system = """You are an expert academic quiz writer. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
+    system = """You are an expert academic quiz writer. Respond ONLY in valid JSON — a list of question objects."""
+
     prompt = f"""For the lecture "{title}", generate 15-18 quiz questions.
-Test theoretical understanding — definitions, mechanisms, and principles.
-For math content, include questions that require actual calculation or equation solving, not just definitions.
-Write any math expressions in LaTeX notation inside the JSON strings using $expression$ format.
-Each object must have: question, options (array of 4 strings), correct (index 0-3), explanation, difficulty ("easy"/"medium"/"hard").
+
+Requirements:
+- Mix of easy (30%), medium (50%), and hard (20%) difficulty
+- Each question has 4 genuinely plausible answer options (not obviously wrong distractors)
+- Detailed 2-3 sentence explanation of why the correct answer is right AND why each wrong answer is wrong
+
+Each object must have:
+- question: the question text
+- options: array of 4 strings (the answer choices)
+- correct: index (0-3) of the correct answer
+- explanation: detailed explanation covering correct and incorrect answers
+- difficulty: "easy", "medium", or "hard"
 
 NOTES:
 {notes[:8000]}
 
-Respond with raw JSON array only:
-[{{"question": "...", "options": ["a","b","c","d"], "correct": 0, "explanation": "...", "difficulty": "medium"}}]"""
+Respond with a JSON array only."""
+
     content = _chat([{"role": "user", "content": prompt}], system)
-    return _parse_json(content)
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])
+    import json
+    return json.loads(content)
 
 
 def generate_flashcards(transcript: str, notes: str, title: str) -> list:
-    system = """You are an expert academic flashcard creator. Respond ONLY with a valid JSON array. No markdown, no code fences. Just raw JSON."""
+    system = """You are an expert academic flashcard creator. Respond ONLY in valid JSON — a list of card objects."""
+
     prompt = f"""For the lecture "{title}", generate 22-28 flashcards.
-Test theoretical understanding — definitions, mechanisms, principles, and relationships between concepts.
-For math content, include cards that test ability to recall and apply formulas and equations.
-Write any math expressions in LaTeX notation using $expression$ format.
-Each object must have "front" (clear question) and "back" (2-3 sentence answer).
+
+Requirements:
+- Fronts phrased as questions (not just terms) — e.g. "What is the difference between X and Y?" not just "X"
+- Backs are 2-4 sentences with context and concrete examples
+- Cover all major concepts from the lecture
+
+Each object must have:
+- front: question text
+- back: answer with context and example
 
 NOTES:
 {notes[:8000]}
 
-Respond with raw JSON array only:
-[{{"front": "What is...?", "back": "..."}}]"""
+Respond with a JSON array only."""
+
     content = _chat([{"role": "user", "content": prompt}], system)
-    return _parse_json(content)
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])
+    import json
+    return json.loads(content)
 
 
-def chat_with_lecture(transcript: str, title: str, messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
-    tone_prompts = {
-        "friendly": "Be warm but concise. No filler phrases. Acknowledge what they asked then answer clearly. Use bullet points only when listing 3+ things. Never start with 'Great question!' or similar.",
-        "strict": "Be direct and precise. No encouragement or filler. Get to the point immediately. Short answers where possible.",
-        "socratic": "Ask one focused question to guide the student to the answer themselves. Keep it brief."
-    }
-    tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
-    system = f"""You are {chatbot_name}, a study assistant for: "{title}". {tone_desc}
-When explaining concepts always lead with theory before examples.
-When answering math questions write all equations in LaTeX: inline as $expression$, block as $$expression$$.
+def chat_with_lecture(transcript: str, title: str, messages: list) -> str:
+    system = f"""You are a helpful study assistant for the lecture: "{title}".
+You have full access to the lecture content below. Answer questions clearly and thoroughly.
+Use specific examples and concepts from the lecture. If something isn't covered, say so.
+
 LECTURE CONTENT:
 {transcript[:15000]}"""
-    return _chat(messages, system, max_tokens=512)
 
-
-def chat_general(messages: list, chatbot_name: str = "Tutor", chatbot_tone: str = "friendly") -> str:
-    tone_prompts = {
-        "friendly": "Be warm but concise. No filler phrases. Acknowledge what they asked then answer clearly. Use bullet points only when listing 3+ things. Never start with 'Great question!' or similar.",
-        "strict": "Be direct and precise. No encouragement or filler. Get to the point immediately. Short answers where possible.",
-        "socratic": "Ask one focused question to guide the student to the answer themselves. Keep it brief."
-    }
-    tone_desc = tone_prompts.get(chatbot_tone, tone_prompts["friendly"])
-    system = f"""You are {chatbot_name}, a university study assistant. {tone_desc}
-When explaining concepts always lead with theory before examples.
-When answering math questions write all equations in LaTeX: inline as $expression$, block as $$expression$$."""
-    return _chat(messages, system, max_tokens=512)
+    return _chat(messages, system)

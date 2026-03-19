@@ -1,45 +1,42 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
 import { apiGet, apiPost } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
-import { Zap, Trash2, FolderInput, BookOpen, List, HelpCircle, Layers, GitFork } from "lucide-react";
-import ConceptMap from "@/components/ConceptMap";
+import { Zap, Trash2, FolderInput, Send, ChevronRight, BookOpen, List, HelpCircle, Layers } from "lucide-react";
 
 const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "glossary", label: "Glossary", icon: List },
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Layers },
-  { id: "concepts", label: "Concept Map", icon: GitFork },
 ];
 
-const DEPTH_OPTIONS = [
-  { id: "cooked", label: "💀 Cooked", desc: "Short & sharp" },
-  { id: "meh", label: "😐 Meh", desc: "Balanced" },
-  { id: "ontop", label: "🔥 On Top", desc: "Maximum depth" },
-];
-
-export default function LectureView({ lectureId, user, subjects, onDelete, onMoved, notesCache = {}, setNotesCache }) {
+export default function LectureView({ lectureId, user, subjects, onDelete, onMoved }) {
   const [lecture, setLecture] = useState(null);
   const [materials, setMaterials] = useState(null);
   const [tab, setTab] = useState("notes");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState("");
-  const [conceptMap, setConceptMap] = useState(null);
-  const [generatingConcepts, setGeneratingConcepts] = useState(false);
+
+  // Quiz state
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState({});
+
+  // Flashcard state
   const [flipped, setFlipped] = useState({});
   const [fcIndex, setFcIndex] = useState(0);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef(null);
+
+  // Move modal state
   const [showMove, setShowMove] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const [notesDepth, setNotesDepth] = useState("meh");
-  const [regeneratingNotes, setRegeneratingNotes] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -47,10 +44,12 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     setQuizSubmitted({});
     setFlipped({});
     setFcIndex(0);
-    setConceptMap(null);
-    setTab("notes");
-    setHeaderCollapsed(false);
+    setChatMessages([]);
   }, [lectureId]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const loadData = async () => {
     setLoading(true);
@@ -61,13 +60,6 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
       ]);
       setLecture(lec);
       setMaterials(mat);
-      if (mat?.notes) {
-        const savedDepth = mat.notes_depth || "meh";
-        setNotesDepth(savedDepth);
-        setNotesCache(c => ({ ...c, [`${lectureId}__${savedDepth}`]: mat.notes }));
-        if (mat.notes_cooked) setNotesCache(c => ({ ...c, [`${lectureId}__cooked`]: mat.notes_cooked }));
-        if (mat.notes_ontop) setNotesCache(c => ({ ...c, [`${lectureId}__ontop`]: mat.notes_ontop }));
-      }
     } catch (e) {
       toast.error("Failed to load lecture: " + e.message);
     } finally {
@@ -75,43 +67,13 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     }
   };
 
-  const cacheKey = (depth) => `${lectureId}__${depth}`;
-
-  const regenerateNotes = async (depth) => {
-    setRegeneratingNotes(true);
-    try {
-      const result = await apiPost(`/materials/${lectureId}/regenerate-notes`, { depth });
-      setNotesCache((c) => ({ ...c, [cacheKey(depth)]: result.notes }));
-      setMaterials((m) => ({ ...m, notes: result.notes }));
-      toast.success("Notes regenerated!");
-    } catch (e) {
-      toast.error("Failed to regenerate notes: " + e.message);
-    } finally {
-      setRegeneratingNotes(false);
-    }
-  };
-
-  const handleDepthChange = (newDepth) => {
-    setNotesDepth(newDepth);
-    if (notesCache[cacheKey(newDepth)]) {
-      setMaterials((m) => ({ ...m, notes: notesCache[cacheKey(newDepth)] }));
-      return;
-    }
-    regenerateNotes(newDepth);
-  };
-
   const generateQuiz = async () => {
     setGenerating("quiz");
     try {
-      const endpoint = materials.quiz
-        ? `/materials/${lectureId}/regenerate-quiz`
-        : `/materials/${lectureId}/generate-quiz`;
-      const quiz = await apiPost(endpoint);
+      const quiz = await apiPost(`/materials/${lectureId}/generate-quiz`);
       setMaterials((m) => ({ ...m, quiz }));
-      setQuizAnswers({});
-      setQuizSubmitted({});
       setTab("quiz");
-      toast.success(materials.quiz ? "Quiz regenerated!" : "Quiz generated!");
+      toast.success("Quiz generated!");
     } catch (e) {
       toast.error("Failed to generate quiz: " + e.message);
     } finally {
@@ -122,15 +84,10 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   const generateFlashcards = async () => {
     setGenerating("flashcards");
     try {
-      const endpoint = materials.flashcards
-        ? `/materials/${lectureId}/regenerate-flashcards`
-        : `/materials/${lectureId}/generate-flashcards`;
-      const flashcards = await apiPost(endpoint);
+      const flashcards = await apiPost(`/materials/${lectureId}/generate-flashcards`);
       setMaterials((m) => ({ ...m, flashcards }));
-      setFcIndex(0);
-      setFlipped({});
       setTab("flashcards");
-      toast.success(materials.flashcards ? "Flashcards regenerated!" : "Flashcards generated!");
+      toast.success("Flashcards generated!");
     } catch (e) {
       toast.error("Failed to generate flashcards: " + e.message);
     } finally {
@@ -138,21 +95,23 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
     }
   };
 
-  const generateConceptMap = async () => {
-    setGeneratingConcepts(true);
+  const sendChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const newMsg = { role: "user", content: chatInput.trim() };
+    const updatedMessages = [...chatMessages, newMsg];
+    setChatMessages(updatedMessages);
+    setChatInput("");
+    setChatLoading(true);
     try {
-      const data = await apiPost("/concepts/", {
+      const { reply } = await apiPost("/chat/", {
         lecture_id: lectureId,
-        notes: materials.notes || "",
-        title: lecture.title,
+        messages: updatedMessages,
       });
-      setConceptMap(data);
-      setTab("concepts");
-      toast.success("Concept map generated!");
+      setChatMessages([...updatedMessages, { role: "assistant", content: reply }]);
     } catch (e) {
-      toast.error("Failed to generate concept map: " + e.message);
+      toast.error("Chat error: " + e.message);
     } finally {
-      setGeneratingConcepts(false);
+      setChatLoading(false);
     }
   };
 
@@ -189,28 +148,37 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-cream-darker bg-white flex-shrink-0">
-        <div className="px-8 py-4 flex items-start justify-between gap-4">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Lecture header */}
+        <div className="px-8 py-5 border-b border-cream-darker bg-white flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               {lecture.subjects && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold text-white" style={{ backgroundColor: lecture.subjects.colour || "#c17b2e" }}>
+                <span
+                  className="text-xs px-2.5 py-0.5 rounded-full font-semibold text-white"
+                  style={{ backgroundColor: lecture.subjects.colour || "#c17b2e" }}
+                >
                   {lecture.subjects.name}
                 </span>
               )}
               <span className="text-xs text-ink-light capitalize">{lecture.source_type}</span>
             </div>
             <h1 className="font-serif text-2xl text-ink truncate">{lecture.title}</h1>
+            {materials.summary && (
+              <p className="text-ink-light text-sm mt-2 leading-relaxed line-clamp-3">{materials.summary}</p>
+            )}
           </div>
+
           <div className="flex gap-2 flex-shrink-0">
             <div className="relative">
               <button
                 onClick={() => setShowMove(!showMove)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-cream border border-cream-darker rounded-lg text-ink hover:bg-cream-darker transition-colors"
               >
-                <FolderInput size={13} /> Move
+                <FolderInput size={13} />
+                Move
               </button>
               {showMove && (
                 <div className="absolute right-0 top-full mt-1 bg-white border border-cream-darker rounded-xl shadow-lg p-2 z-20 w-48">
@@ -231,102 +199,82 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
               onClick={deleteLecture}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-cream border border-cream-darker rounded-lg text-red-600 hover:bg-red-50 transition-colors"
             >
-              <Trash2 size={13} /> Delete
+              <Trash2 size={13} />
+              Delete
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-t border-cream-darker bg-white px-8 gap-1">
+        <div className="flex border-b border-cream-darker bg-white px-8 gap-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${tab === id ? "border-amber text-amber" : "border-transparent text-ink-light hover:text-ink"}`}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === id
+                  ? "border-amber text-amber"
+                  : "border-transparent text-ink-light hover:text-ink"
+              }`}
             >
               <Icon size={14} />
               {label}
-              {id === "quiz" && !materials.quiz && <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>}
-              {id === "flashcards" && !materials.flashcards && <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>}
+              {id === "quiz" && !materials.quiz && (
+                <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>
+              )}
+              {id === "flashcards" && !materials.flashcards && (
+                <span className="text-xs text-ink-light/60 italic ml-1">not generated</span>
+              )}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8" onScroll={(e) => setHeaderCollapsed(e.target.scrollTop > 60)}>
-        {tab === "notes" && (
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-xs text-ink-light font-medium">Depth:</span>
-              <div className="flex gap-1">
-                {DEPTH_OPTIONS.map(({ id, label, desc }) => (
-                  <button
-                    key={id}
-                    onClick={() => handleDepthChange(id)}
-                    disabled={regeneratingNotes}
-                    title={desc}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      notesDepth === id
-                        ? "bg-amber text-white"
-                        : "bg-cream border border-cream-darker text-ink-light hover:text-ink hover:border-amber/40"
-                    } disabled:opacity-50`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {regeneratingNotes && (
-                <div className="flex items-center gap-2 text-xs text-ink-light ml-2">
-                  <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                  Regenerating...
-                </div>
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto p-8">
+          {tab === "notes" && (
+            <div className="max-w-3xl prose-notes">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{materials.notes || "No notes available."}</ReactMarkdown>
+            </div>
+          )}
+
+          {tab === "glossary" && (
+            <div className="max-w-3xl space-y-4">
+              {Array.isArray(materials.glossary) ? (
+                materials.glossary.map((item, i) => (
+                  <div key={i} className="bg-white border border-cream-darker rounded-xl p-5">
+                    <h3 className="font-serif text-lg text-amber font-semibold mb-2">{item.term}</h3>
+                    <p className="text-ink text-sm leading-relaxed">{item.definition}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-ink-light">No glossary available.</p>
               )}
             </div>
-            <div className="prose-notes">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{notesCache[cacheKey(notesDepth)] || materials.notes || "No notes available."}</ReactMarkdown>
-            </div>
-          </div>
-        )}
+          )}
 
-        {tab === "glossary" && (
-          <div className="max-w-3xl space-y-4">
-            {Array.isArray(materials.glossary) ? (
-              materials.glossary.map((item, i) => (
-                <div key={i} className="bg-white border border-cream-darker rounded-xl p-5">
-                  <h3 className="font-serif text-lg text-amber font-semibold mb-2">{item.term}</h3>
-                  <p className="text-ink text-sm leading-relaxed">{item.definition}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-ink-light">No glossary available.</p>
-            )}
-          </div>
-        )}
-
-        {tab === "quiz" && (
-          <div className="max-w-3xl">
-            {!materials.quiz ? (
-              <div className="text-center py-16">
-                <div className="text-5xl mb-4">🎯</div>
-                <h3 className="font-serif text-xl text-ink mb-2">Ready to test your knowledge?</h3>
-                <p className="text-ink-light text-sm mb-6">Generate a 15–18 question quiz covering all lecture concepts.</p>
-                <button onClick={generateQuiz} disabled={!!generating} className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto">
-                  {generating === "quiz" ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Quiz</>}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-end mb-4">
-                  <button onClick={generateQuiz} disabled={!!generating} className="flex items-center gap-2 px-4 py-2 bg-cream border border-cream-darker rounded-lg text-xs font-semibold text-ink hover:bg-cream-darker transition-colors disabled:opacity-60">
-                    {generating === "quiz" ? <><div className="spinner" style={{width:12,height:12,borderWidth:2}}/> Regenerating...</> : <><Zap size={13}/> Regenerate Quiz</>}
+          {tab === "quiz" && (
+            <div className="max-w-3xl">
+              {!materials.quiz ? (
+                <div className="text-center py-16">
+                  <div className="text-5xl mb-4">🎯</div>
+                  <h3 className="font-serif text-xl text-ink mb-2">Ready to test your knowledge?</h3>
+                  <p className="text-ink-light text-sm mb-6">Generate a 15–18 question quiz covering all lecture concepts.</p>
+                  <button
+                    onClick={generateQuiz}
+                    disabled={!!generating}
+                    className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto"
+                  >
+                    {generating === "quiz" ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Quiz</>}
                   </button>
                 </div>
+              ) : (
                 <div className="space-y-6">
                   {materials.quiz.map((q, qi) => (
                     <div key={qi} className="bg-white border border-cream-darker rounded-xl p-6">
                       <div className="flex items-start gap-3 mb-4">
-                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-cream text-ink-light flex-shrink-0 mt-0.5">Q{qi + 1} · {q.difficulty}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-cream text-ink-light flex-shrink-0 mt-0.5">
+                          Q{qi + 1} · {q.difficulty}
+                        </span>
                         <p className="font-medium text-ink text-sm leading-relaxed">{q.question}</p>
                       </div>
                       <div className="space-y-2 ml-12">
@@ -342,14 +290,21 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                             cls = "border-amber bg-amber-pale text-amber";
                           }
                           return (
-                            <button key={oi} onClick={() => !submitted && setQuizAnswers((a) => ({ ...a, [qi]: oi }))} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${cls}`}>
+                            <button
+                              key={oi}
+                              onClick={() => !submitted && setQuizAnswers((a) => ({ ...a, [qi]: oi }))}
+                              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${cls}`}
+                            >
                               {String.fromCharCode(65 + oi)}. {opt}
                             </button>
                           );
                         })}
                       </div>
                       {!quizSubmitted[qi] && quizAnswers[qi] !== undefined && (
-                        <button onClick={() => setQuizSubmitted((s) => ({ ...s, [qi]: true }))} className="ml-12 mt-3 px-4 py-1.5 bg-amber text-white text-xs font-semibold rounded-lg hover:bg-amber-light transition-colors">
+                        <button
+                          onClick={() => setQuizSubmitted((s) => ({ ...s, [qi]: true }))}
+                          className="ml-12 mt-3 px-4 py-1.5 bg-amber text-white text-xs font-semibold rounded-lg hover:bg-amber-light transition-colors"
+                        >
                           Submit
                         </button>
                       )}
@@ -361,73 +316,160 @@ export default function LectureView({ lectureId, user, subjects, onDelete, onMov
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {tab === "flashcards" && (
-          <div className="max-w-2xl mx-auto">
-            {!materials.flashcards ? (
-              <div className="text-center py-16">
-                <div className="text-5xl mb-4">🃏</div>
-                <h3 className="font-serif text-xl text-ink mb-2">Create flashcards for active recall</h3>
-                <p className="text-ink-light text-sm mb-6">Generate 22–28 question-based flashcards to reinforce your learning.</p>
-                <button onClick={generateFlashcards} disabled={!!generating} className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto">
-                  {generating === "flashcards" ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Flashcards</>}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-end mb-2">
-                  <button onClick={generateFlashcards} disabled={!!generating} className="flex items-center gap-2 px-4 py-2 bg-cream border border-cream-darker rounded-lg text-xs font-semibold text-ink hover:bg-cream-darker transition-colors disabled:opacity-60">
-                    {generating === "flashcards" ? <><div className="spinner" style={{width:12,height:12,borderWidth:2}}/> Regenerating...</> : <><Zap size={13}/> Regenerate Flashcards</>}
+          {tab === "flashcards" && (
+            <div className="max-w-2xl mx-auto">
+              {!materials.flashcards ? (
+                <div className="text-center py-16">
+                  <div className="text-5xl mb-4">🃏</div>
+                  <h3 className="font-serif text-xl text-ink mb-2">Create flashcards for active recall</h3>
+                  <p className="text-ink-light text-sm mb-6">Generate 22–28 question-based flashcards to reinforce your learning.</p>
+                  <button
+                    onClick={generateFlashcards}
+                    disabled={!!generating}
+                    className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto"
+                  >
+                    {generating === "flashcards" ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Flashcards</>}
                   </button>
                 </div>
-                <div className="flex items-center justify-between mb-6">
-                  <button onClick={() => { setFcIndex((i) => Math.max(0, i - 1)); setFlipped({}); }} disabled={fcIndex === 0} className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors">← Previous</button>
-                  <span className="text-sm text-ink-light font-medium">{fcIndex + 1} / {materials.flashcards.length}</span>
-                  <button onClick={() => { setFcIndex((i) => Math.min(materials.flashcards.length - 1, i + 1)); setFlipped({}); }} disabled={fcIndex === materials.flashcards.length - 1} className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors">Next →</button>
-                </div>
-                <div className="perspective cursor-pointer" onClick={() => setFlipped((f) => ({ ...f, [fcIndex]: !f[fcIndex] }))} style={{ height: 280 }}>
-                  <div className="flip-card relative w-full h-full" style={{ transform: flipped[fcIndex] ? "rotateY(180deg)" : "rotateY(0deg)", transformStyle: "preserve-3d", transition: "transform 0.5s" }}>
-                    <div className="flip-front absolute inset-0 bg-white border-2 border-amber/20 rounded-2xl flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: "hidden" }}>
-                      <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Question</div>
-                      <p className="font-serif text-xl text-ink leading-relaxed">{materials.flashcards[fcIndex]?.front}</p>
-                      <p className="text-xs text-ink-light mt-6">Click to reveal answer</p>
-                    </div>
-                    <div className="flip-back absolute inset-0 bg-amber-pale border-2 border-amber/30 rounded-2xl flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
-                      <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Answer</div>
-                      <p className="text-ink text-sm leading-relaxed">{materials.flashcards[fcIndex]?.back}</p>
+              ) : (
+                <div>
+                  {/* Navigation */}
+                  <div className="flex items-center justify-between mb-6">
+                    <button
+                      onClick={() => { setFcIndex((i) => Math.max(0, i - 1)); setFlipped({}); }}
+                      disabled={fcIndex === 0}
+                      className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors"
+                    >
+                      ← Previous
+                    </button>
+                    <span className="text-sm text-ink-light font-medium">
+                      {fcIndex + 1} / {materials.flashcards.length}
+                    </span>
+                    <button
+                      onClick={() => { setFcIndex((i) => Math.min(materials.flashcards.length - 1, i + 1)); setFlipped({}); }}
+                      disabled={fcIndex === materials.flashcards.length - 1}
+                      className="px-4 py-2 bg-white border border-cream-darker rounded-lg text-sm text-ink disabled:opacity-40 hover:bg-cream transition-colors"
+                    >
+                      Next →
+                    </button>
+                  </div>
+
+                  {/* Card */}
+                  <div
+                    className="perspective cursor-pointer"
+                    onClick={() => setFlipped((f) => ({ ...f, [fcIndex]: !f[fcIndex] }))}
+                    style={{ height: 280 }}
+                  >
+                    <div
+                      className={`flip-card relative w-full h-full`}
+                      style={{ transform: flipped[fcIndex] ? "rotateY(180deg)" : "rotateY(0deg)", transformStyle: "preserve-3d", transition: "transform 0.5s" }}
+                    >
+                      {/* Front */}
+                      <div
+                        className="flip-front absolute inset-0 bg-white border-2 border-amber/20 rounded-2xl flex flex-col items-center justify-center p-8 text-center"
+                        style={{ backfaceVisibility: "hidden" }}
+                      >
+                        <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Question</div>
+                        <p className="font-serif text-xl text-ink leading-relaxed">{materials.flashcards[fcIndex]?.front}</p>
+                        <p className="text-xs text-ink-light mt-6">Click to reveal answer</p>
+                      </div>
+                      {/* Back */}
+                      <div
+                        className="flip-back absolute inset-0 bg-amber-pale border-2 border-amber/30 rounded-2xl flex flex-col items-center justify-center p-8 text-center"
+                        style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+                      >
+                        <div className="text-xs text-amber font-semibold uppercase tracking-widest mb-4">Answer</div>
+                        <p className="text-ink text-sm leading-relaxed">{materials.flashcards[fcIndex]?.back}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
-                  {materials.flashcards.map((_, i) => (
-                    <button key={i} onClick={() => { setFcIndex(i); setFlipped({}); }} className={`w-2 h-2 rounded-full transition-colors ${i === fcIndex ? "bg-amber" : "bg-cream-darker hover:bg-ink-light/40"}`} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
-        {tab === "concepts" && (
-          <div className="max-w-3xl">
-            {!conceptMap ? (
-              <div className="text-center py-16">
-                <div className="text-5xl mb-4">🗺️</div>
-                <h3 className="font-serif text-xl text-ink mb-2">Visualise how concepts connect</h3>
-                <p className="text-ink-light text-sm mb-6">Generate a visual map of all key concepts and their relationships.</p>
-                <button onClick={generateConceptMap} disabled={generatingConcepts} className="flex items-center gap-2 px-6 py-3 bg-amber text-white font-semibold rounded-xl hover:bg-amber-light transition-colors disabled:opacity-60 mx-auto">
-                  {generatingConcepts ? <><div className="spinner" /> Generating...</> : <><Zap size={16} /> Generate Concept Map</>}
-                </button>
+                  {/* Dot navigation */}
+                  <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
+                    {materials.flashcards.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setFcIndex(i); setFlipped({}); }}
+                        className={`w-2 h-2 rounded-full transition-colors ${i === fcIndex ? "bg-amber" : "bg-cream-darker hover:bg-ink-light/40"}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chatbot panel */}
+      <div className="w-80 flex-shrink-0 border-l border-cream-darker flex flex-col bg-white">
+        <div className="px-5 py-4 border-b border-cream-darker">
+          <h3 className="font-serif text-base text-ink">Ask the lecture</h3>
+          <p className="text-xs text-ink-light mt-0.5">AI tutor with full lecture context</p>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {chatMessages.length === 0 && (
+            <div className="text-center py-8 text-xs text-ink-light leading-relaxed">
+              <div className="text-3xl mb-3">💬</div>
+              Ask anything about the lecture — concepts, examples, exam tips, or connections to other topics.
+            </div>
+          )}
+          {chatMessages.map((m, i) => (
+            <div
+              key={i}
+              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
+                  m.role === "user"
+                    ? "bg-amber text-white rounded-tr-sm"
+                    : "bg-cream text-ink rounded-tl-sm"
+                }`}
+              >
+                {m.content}
               </div>
-            ) : (
-              <ConceptMap nodes={conceptMap.nodes} edges={conceptMap.edges} />
-            )}
+            </div>
+          ))}
+          {chatLoading && (
+            <div className="flex justify-start">
+              <div className="bg-cream rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="p-4 border-t border-cream-darker">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendChat()}
+              placeholder="Ask a question..."
+              className="flex-1 px-3 py-2 rounded-xl border border-cream-darker bg-cream text-ink text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
+            />
+            <button
+              onClick={sendChat}
+              disabled={chatLoading || !chatInput.trim()}
+              className="w-9 h-9 flex items-center justify-center bg-amber text-white rounded-xl hover:bg-amber-light transition-colors disabled:opacity-40"
+            >
+              <Send size={14} />
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

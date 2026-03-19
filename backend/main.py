@@ -10,7 +10,7 @@ load_dotenv()
 
 from routers import lectures, subjects, materials, chat
 
-app = FastAPI(title="Xelyqor API", version="1.0.0")
+app = FastAPI(title="Inqlo API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

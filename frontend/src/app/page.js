@@ -19,6 +19,7 @@ export default function Home() {
   const [showNewLecture, setShowNewLecture] = useState(false);
   const [view, setView] = useState("library");
   const [notesCache, setNotesCache] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
   const [userSettings, setUserSettings] = useState({
     chatbot_name: "Tutor",
     chatbot_tone: "friendly",
@@ -65,12 +66,14 @@ export default function Home() {
   const openLecture = (id) => {
     setSelectedLectureId(id);
     setView("lecture");
+    setSearchQuery("");
   };
 
   const openSubject = (id) => {
     setSelectedSubject(id);
     setView("subject");
     setSelectedLectureId(null);
+    setSearchQuery("");
   };
 
   const openLibrary = () => {
@@ -105,6 +108,8 @@ export default function Home() {
         userSettings={userSettings}
         onDeleteSubject={loadData}
         onDeleteLecture={() => { openLibrary(); loadData(); }}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
       />
 
       <main className="flex-1 flex min-w-0 overflow-hidden" style={{ height: "100vh" }}>
@@ -115,6 +120,7 @@ export default function Home() {
             selectedSubject={selectedSubject}
             onSelect={openLecture}
             onDelete={loadData}
+            searchQuery={searchQuery}
           />
         )}
         {view === "subject" && selectedSubject && (

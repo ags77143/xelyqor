@@ -1,15 +1,20 @@
 "use client";
 import { useState } from "react";
-import { FolderOpen, MoreHorizontal, Trash2, FolderInput, ChevronRight } from "lucide-react";
+import { FolderOpen, MoreHorizontal, Trash2, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
 
-export default function Library({ lectures, subjects, selectedSubject, onSelect, onDelete }) {
+export default function Library({ lectures, subjects, selectedSubject, onSelect, onDelete, searchQuery }) {
   const [openMenu, setOpenMenu] = useState(null);
 
-  const filtered = selectedSubject
-    ? lectures?.filter((l) => l.subject_id === selectedSubject)
-    : lectures;
+  const filtered = lectures?.filter((l) => {
+    const matchesSubject = selectedSubject ? l.subject_id === selectedSubject : true;
+    const q = searchQuery?.toLowerCase().trim();
+    const matchesSearch = q
+      ? l.title?.toLowerCase().includes(q) || l.subjects?.name?.toLowerCase().includes(q)
+      : true;
+    return matchesSubject && matchesSearch;
+  });
 
   const deleteLecture = async (e, id) => {
     e.stopPropagation();
@@ -25,13 +30,17 @@ export default function Library({ lectures, subjects, selectedSubject, onSelect,
     <div className="flex-1 overflow-y-auto p-8" onClick={() => setOpenMenu(null)}>
       <div className="max-w-4xl mx-auto">
         <h2 className="font-serif text-2xl text-ink mb-6">
-          {selectedSubject ? subjects?.find((s) => s.id === selectedSubject)?.name || "Subject" : "All Lectures"}
+          {searchQuery?.trim()
+            ? `Results for "${searchQuery.trim()}"`
+            : selectedSubject
+            ? subjects?.find((s) => s.id === selectedSubject)?.name || "Subject"
+            : "All Lectures"}
         </h2>
         {!filtered?.length ? (
           <div className="text-center py-20 text-ink-light">
             <FolderOpen size={48} className="mx-auto mb-4 opacity-30" />
-            <p className="text-lg font-medium">No lectures yet</p>
-            <p className="text-sm mt-1">Click "New Lecture" to get started</p>
+            <p className="text-lg font-medium">{searchQuery?.trim() ? "No lectures match your search" : "No lectures yet"}</p>
+            <p className="text-sm mt-1">{searchQuery?.trim() ? "Try a different search term" : "Click \"New Lecture\" to get started"}</p>
           </div>
         ) : (
           <div className="grid gap-3">

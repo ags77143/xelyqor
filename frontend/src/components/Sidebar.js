@@ -6,7 +6,8 @@ import toast from "react-hot-toast";
 
 export default function Sidebar({
   subjects, onSelectSubject, onNewLecture, onLibrary, user,
-  userSettings, onDeleteSubject, onDeleteLecture, selectedSubject
+  userSettings, onDeleteSubject, onDeleteLecture, selectedSubject,
+  searchQuery, setSearchQuery
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
@@ -70,6 +71,11 @@ export default function Sidebar({
         <input
           type="text"
           placeholder="Search lectures..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            onLibrary();
+          }}
           className="w-full px-3 py-2 rounded-lg border border-cream-darker bg-cream text-ink text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
         />
       </div>
@@ -117,13 +123,13 @@ export default function Sidebar({
             </div>
             {openMenu === `s-${s.id}` && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-cream-darker rounded-xl shadow-lg p-1 z-30 w-44" onClick={e => e.stopPropagation()}>
-              <button
-                onClick={(e) => deleteSubject(e, s.id)}
-                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg"
-              >
-                <Trash2 size={12} /> Delete Subject
-              </button>
-            </div>
+                <button
+                  onClick={(e) => deleteSubject(e, s.id)}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                >
+                  <Trash2 size={12} /> Delete Subject
+                </button>
+              </div>
             )}
           </div>
         ))}

@@ -2,7 +2,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 
 export const metadata = {
-  title: "Inqlo — AI Study Materials",
+  title: "Xelyqor — AI Study Materials",
   description: "Generate comprehensive study materials from your lectures",
 };
 

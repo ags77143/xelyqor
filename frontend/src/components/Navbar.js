@@ -15,7 +15,7 @@ export default function Navbar({ user, onNewLecture, onLibrary }) {
     <nav className="h-14 bg-white border-b border-cream-darker flex items-center px-6 gap-4 z-50 sticky top-0">
       {/* Logo */}
       <div className="font-serif text-2xl font-bold text-ink flex-shrink-0">
-        <span className="text-amber">I</span>nqlo
+        <span className="text-amber">X</span>elyqor
       </div>
 
       {/* Center buttons */}

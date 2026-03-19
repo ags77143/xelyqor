@@ -35,7 +35,7 @@ export default function AuthPage() {
         {/* Logo */}
         <div className="text-center mb-10">
           <h1 className="font-serif text-5xl font-bold text-ink">
-            <span className="text-amber">I</span>nqlo
+            <span className="text-amber">X</span>elyqor
           </h1>
           <p className="text-ink-light mt-2 text-sm">AI-powered study materials for university students</p>
         </div>

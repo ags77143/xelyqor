@@ -1,9 +1,9 @@
-# Inqlo — Complete Setup Guide
+# Xelyqor — Complete Setup Guide
 
 ## File Structure
 
 ```
-inqlo/
+xelyqor/
 ├── backend/
 │   ├── main.py
 │   ├── ai.py
@@ -171,7 +171,7 @@ Visit http://localhost:3000
    GROQ_API_KEY=your-groq-api-key
    ```
 4. Railway auto-detects the `Procfile` and runs `uvicorn`
-5. Copy your Railway deployment URL (e.g. `https://inqlo-backend.up.railway.app`)
+5. Copy your Railway deployment URL (e.g. `https://xelyqor-backend.up.railway.app`)
 
 ---
 
@@ -192,8 +192,8 @@ Visit http://localhost:3000
 ## STEP 7: Supabase Auth Configuration
 
 In Supabase → Authentication → URL Configuration:
-- **Site URL**: your Vercel URL (e.g. `https://inqlo.vercel.app`)
-- **Redirect URLs**: add `https://inqlo.vercel.app/**`
+- **Site URL**: your Vercel URL (e.g. `https://xelyqor.vercel.app`)
+- **Redirect URLs**: add `https://xelyqor.vercel.app/**`
 
 ---
 

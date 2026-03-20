@@ -21,7 +21,7 @@ Respond ONLY in valid JSON with keys: title, summary, notes."""
     prompt = f"""Given this lecture transcript, generate:
 1. title: A concise, descriptive title for this lecture (no quotes)
 2. summary: A 6-8 sentence executive summary of the entire lecture covering all major themes
-3. notes: COMPREHENSIVE study notes — MINIMUM 1200 words. 
+3. notes: COMPREHENSIVE study notes — MINIMUM 1200 words.
 
 Notes MUST follow this structure:
 - Use ## and ### markdown headers
@@ -36,12 +36,49 @@ TRANSCRIPT:
 Respond with valid JSON only."""
 
     content = _chat([{"role": "user", "content": prompt}], system)
-    # Strip markdown code fences if present
     if content.startswith("```"):
         lines = content.split("\n")
         content = "\n".join(lines[1:-1])
     import json
     return json.loads(content)
+
+
+def generate_notes_cooked(transcript: str, title: str) -> str:
+    system = """You are an expert academic tutor. Generate brutally condensed bullet-point notes.
+Respond ONLY with raw markdown — no JSON, no preamble."""
+
+    prompt = f"""Generate "Cooked" depth notes for the lecture: "{title}".
+
+Rules:
+- Bullet points ONLY — no paragraphs, no explanations
+- Each bullet is one crisp fact, definition, or formula — max 15 words
+- Use ## headers to group topics
+- No fluff, no examples, no context — just the raw facts needed to pass an exam
+- Minimum 60 bullets
+
+TRANSCRIPT:
+{transcript[:12000]}"""
+
+    return _chat([{"role": "user", "content": prompt}], system)
+
+
+def generate_notes_ontop(transcript: str, title: str) -> str:
+    system = """You are an expert academic tutor writing full academic study notes.
+Respond ONLY with raw markdown — no JSON, no preamble."""
+
+    prompt = f"""Generate "On Top" depth notes for the lecture: "{title}".
+
+Rules:
+- Full academic prose with markdown headers
+- MINIMUM 2000 words
+- For every concept: definition, mechanism, worked examples, real-world application, exam traps, links to other concepts
+- Include a ## Summary section at the end
+- Write as if this is the only document a student will read before a final exam
+
+TRANSCRIPT:
+{transcript[:12000]}"""
+
+    return _chat([{"role": "user", "content": prompt}], system)
 
 
 def generate_glossary(transcript: str, title: str) -> list:

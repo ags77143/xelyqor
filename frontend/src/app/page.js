@@ -16,7 +16,7 @@ export default function Home() {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [showNewLecture, setShowNewLecture] = useState(false);
-  const [view, setView] = useState("library"); // library | lecture
+  const [view, setView] = useState("library");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -27,7 +27,6 @@ export default function Home() {
       setUser(session.user);
       setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) window.location.href = "/auth";
       else setUser(session.user);
@@ -73,12 +72,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-cream">
-      <Navbar
-        user={user}
-        onNewLecture={() => setShowNewLecture(true)}
-        onLibrary={openLibrary}
-      />
-
+      <Navbar user={user} />
       <div className="flex flex-1 min-h-0" style={{ height: "calc(100vh - 56px)" }}>
         <Sidebar
           subjects={subjects}
@@ -87,8 +81,10 @@ export default function Home() {
           onSelectSubject={(id) => { setSelectedSubject(id); setView("library"); setSelectedLectureId(null); }}
           onSelectLecture={openLecture}
           selectedLectureId={selectedLectureId}
+          onNewLecture={() => setShowNewLecture(true)}
+          onLibrary={openLibrary}
+          user={user}
         />
-
         <main className="flex-1 flex min-w-0 overflow-hidden">
           {view === "library" || !selectedLectureId ? (
             <Library
@@ -109,7 +105,6 @@ export default function Home() {
           )}
         </main>
       </div>
-
       {showNewLecture && (
         <NewLectureModal
           subjects={subjects}

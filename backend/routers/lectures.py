@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from db import get_supabase
 from extractor import extract_youtube_transcript, extract_pdf_text, extract_pptx_text
-from ai import generate_title_summary_notes, generate_glossary
+from ai import generate_title_summary_notes, generate_glossary, generate_notes_cooked, generate_notes_ontop
 
 router = APIRouter()
 
@@ -73,8 +73,11 @@ async def create_from_file(
     elif filename.endswith(".pptx"):
         transcript = extract_pptx_text(file_bytes)
         source_type = "pptx"
+    elif filename.endswith(".txt"):
+        transcript = file_bytes.decode("utf-8")
+        source_type = "txt"
     else:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF or PPTX.")
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF, PPTX, or TXT.")
 
     return await _create_lecture_with_materials(
         sb, user_id, subject_id, transcript, source_type, file.filename, lecture_name
@@ -82,13 +85,21 @@ async def create_from_file(
 
 
 async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, source_type, source_ref, lecture_name):
-    # Call 1: title + summary + notes
+    import json
+
+    # Call 1: title + summary + meh notes
     result1 = generate_title_summary_notes(transcript)
     title = lecture_name or result1.get("title", "Untitled Lecture")
     summary = result1.get("summary", "")
-    notes = result1.get("notes", "")
+    notes_meh = result1.get("notes", "")
 
-    # Call 2: glossary
+    # Call 2: cooked notes
+    notes_cooked = generate_notes_cooked(transcript, title)
+
+    # Call 3: on top notes
+    notes_ontop = generate_notes_ontop(transcript, title)
+
+    # Call 4: glossary
     glossary = generate_glossary(transcript, title)
 
     # Save lecture
@@ -104,12 +115,13 @@ async def _create_lecture_with_materials(sb, user_id, subject_id, transcript, so
     lecture_id = lecture["id"]
 
     # Save materials
-    import json
     sb.table("study_materials").insert({
         "lecture_id": lecture_id,
         "user_id": user_id,
         "summary": summary,
-        "notes": notes,
+        "notes": notes_meh,
+        "notes_cooked": notes_cooked,
+        "notes_ontop": notes_ontop,
         "glossary": json.dumps(glossary),
         "quiz": None,
         "flashcards": None,
